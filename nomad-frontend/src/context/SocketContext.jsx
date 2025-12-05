@@ -1,51 +1,74 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
-import { useAuth } from './AuthContext';
+import { createContext, useContext, useEffect, useState } from "react";
+import { io } from "socket.io-client";
+import { useAuth } from "./AuthContext";
 
 const SocketContext = createContext();
 
 export const SocketProvider = ({ children }) => {
-    const { token, user } = useAuth();
-    const [socket, setSocket] = useState(null);
-    const [isConnected, setIsConnected] = useState(false);
+  const { token, user } = useAuth();
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState({});
+  const totalUnread = Object.values(unreadMessages).reduce((a, b) => a + b, 0);
 
-    useEffect(() => {
-        if (token && !socket) {
-            // 1. Connect to Chat Service (Port 4000)
-            const newSocket = io('http://localhost:4000', {
-                auth: { token }, // Send JWT for handshake auth
-                transports: ['websocket'], // Force WebSocket (faster)
-            });
+  useEffect(() => {
+    console.log("SocketProvider effect: token:", token, "user:", user);
 
-            newSocket.on('connect', () => {
-                console.log("🟢 Connected to Chat Service");
-                setIsConnected(true);
-            });
+    if (token && user?.email && !socket) {
+      const newSocket = io("http://localhost:4000", {
+        auth: { token },
+        transports: ["websocket"],
+        upgrade: true,
+      });
 
-            newSocket.on('disconnect', () => {
-                console.log("🔴 Disconnected from Chat Service");
-                setIsConnected(false);
-            });
+      newSocket.on("connect", () => {
+        console.log("🟢 Socket connected:", newSocket.id);
+        setIsConnected(true);
+      });
 
-            setSocket(newSocket);
-        }
+      newSocket.on("disconnect", (reason) => {
+        console.log("🔴 Socket disconnected:", reason);
+        setIsConnected(false);
+      });
 
-        // Cleanup on logout
-        if (!token && socket) {
-            socket.disconnect();
-            setSocket(null);
-        }
-        
-        return () => {
-            if (socket) socket.off();
-        };
-    }, [token]);
+      newSocket.on("connect_error", (err) => {
+        console.error("⛔ connect_error:", err && err.message ? err.message : err);
+      });
 
-    return (
-        <SocketContext.Provider value={{ socket, isConnected }}>
-            {children}
-        </SocketContext.Provider>
-    );
+      newSocket.on("error", (err) => {
+        console.error("⚠ socket error:", err);
+      });
+
+      newSocket.on("notification", (data) => {
+        console.log("🔔 notification received:", data);
+        const sender = data.senderEmail || data.sender;
+        if (!sender) return;
+        setUnreadMessages((prev) => ({ ...prev, [sender]: (prev[sender] || 0) + 1 }));
+      });
+
+      setSocket(newSocket);
+    }
+
+    if (!token && socket) {
+      console.log("token cleared, disconnecting socket");
+      socket.disconnect();
+      setSocket(null);
+    }
+  }, [token, user]);
+
+  const clearUnread = (friendEmail) => {
+    setUnreadMessages((prev) => {
+      const next = { ...prev };
+      delete next[friendEmail];
+      return next;
+    });
+  };
+
+  return (
+    <SocketContext.Provider value={{ socket, isConnected, totalUnread, clearUnread }}>
+      {children}
+    </SocketContext.Provider>
+  );
 };
 
 export const useSocket = () => useContext(SocketContext);

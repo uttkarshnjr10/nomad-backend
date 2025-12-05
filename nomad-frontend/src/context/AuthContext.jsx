@@ -1,19 +1,22 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import { authService } from '../services/api';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
+    // 1. Load User from Storage on boot
     const [token, setToken] = useState(localStorage.getItem('nomad_token'));
+    const [user, setUser] = useState(() => {
+        const savedUser = localStorage.getItem('nomad_user');
+        return savedUser ? JSON.parse(savedUser) : null;
+    });
 
     useEffect(() => {
         if (token) {
-            // In a real app, you might validate the token here
-            // For now, we assume if token exists, user is logged in
-            setUser({ token });
+            localStorage.setItem('nomad_token', token);
         } else {
-            setUser(null);
+            localStorage.removeItem('nomad_token');
+            localStorage.removeItem('nomad_user');
         }
     }, [token]);
 
@@ -21,13 +24,17 @@ export const AuthProvider = ({ children }) => {
         try {
             const res = await authService.login({ email, password });
             
-            // Extract data
-            const { token, username, userId } = res.data;
-            
-            // Save to storage and state
+            // Extract all needed data
+            const { token, username, userId, email: userEmail } = res.data;
+            // Fallback for email if backend doesn't send it in body
+            const finalUser = { username, userId, email: userEmail || email };
+
+            // Save to Storage
             localStorage.setItem('nomad_token', token);
+            localStorage.setItem('nomad_user', JSON.stringify(finalUser));
+            
             setToken(token);
-            setUser({ username, userId });
+            setUser(finalUser);
             
             return { success: true };
         } catch (error) {
@@ -39,14 +46,28 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const register = async (userData) => {
+        try {
+            const res = await authService.register(userData);
+            return { success: true, data: res.data };
+        } catch (error) {
+            console.error("Registration Error:", error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Registration failed'
+            };
+        }
+    };
+
     const logout = () => {
-        localStorage.removeItem('nomad_token');
         setToken(null);
         setUser(null);
+        localStorage.removeItem('nomad_token');
+        localStorage.removeItem('nomad_user');
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, token }}>
+        <AuthContext.Provider value={{ user, login, logout, register, token }}>
             {children}
         </AuthContext.Provider>
     );

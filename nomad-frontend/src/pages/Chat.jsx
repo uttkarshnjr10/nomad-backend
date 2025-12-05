@@ -1,174 +1,346 @@
-import { useState, useEffect, useRef } from 'react';
-import { useSocket } from '../context/SocketContext';
-import { useAuth } from '../context/AuthContext';
-import { useLocation } from 'react-router-dom';
-import axios from 'axios'; // We use direct axios for the Node.js history endpoint
-import Navbar from '../components/layout/Navbar';
-import { Send, Hash, User, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
+import { friendApi } from "../services/api";
+import Navbar from "../components/layout/Navbar";
+import { Menu, X, ChevronRight, Smile } from "lucide-react";
+import axios from "axios";
+
+/* Cute send icon */
+const CuteSendIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="cute-plane">
+    <path
+      d="M2 12L20 3L14 21L11 13L2 12Z"
+      stroke="#1f1f1f"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="#FEEA7B"
+    />
+  </svg>
+);
+
+/* Typing indicator */
+const TypingIndicator = ({ name }) => (
+  <div className="flex items-center gap-2 text-sm text-slate-500 px-3 py-1">
+    <span className="animate-pulse">💬 {name} is typing</span>
+  </div>
+);
 
 const Chat = () => {
-    const { socket, isConnected } = useSocket();
-    const { user } = useAuth();
-    const location = useLocation();
-    
-    // State
-    const [messages, setMessages] = useState([]);
-    const [currentMessage, setCurrentMessage] = useState("");
-    const [room, setRoom] = useState("global_lobby");
-    const [chatPartner, setChatPartner] = useState(null); // If private chat
-    const [loadingHistory, setLoadingHistory] = useState(true);
-    
-    const messagesEndRef = useRef(null);
+  const { state } = useLocation();
+  const { user, token } = useAuth();
+  const { socket, clearUnread } = useSocket();
 
-    // 1. Initialize Room Logic
-    useEffect(() => {
-        // Did we come here from the Friends page?
-        if (location.state?.friendId && user?.userId) {
-            const friendId = location.state.friendId;
-            const myId = user.userId;
-            
-            // Create unique room ID: Sort IDs so it's always the same for both users
-            // Result: "private_uuidA_uuidB"
-            const roomId = [myId, friendId].sort().join("_");
-            
-            setRoom(roomId);
-            setChatPartner(location.state.username);
-        } else {
-            setRoom("global_lobby");
-            setChatPartner(null);
-        }
-    }, [location.state, user]);
+  const [activeFriend, setActiveFriend] = useState(null);
+  const [friends, setFriends] = useState([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [dark, setDark] = useState(() => localStorage.getItem("nomad_dark") === "1");
 
-    // 2. Load History & Join Room
-    useEffect(() => {
-        if (!socket || !room) return;
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimer = useRef(null);
 
-        const loadHistoryAndJoin = async () => {
-            setLoadingHistory(true);
-            try {
-                // Fetch last 50 messages from Node.js Service
-                // Note: Direct call to Node service (Port 3000 -> 4000 usually, but check your Chat Service port)
-                // Assuming Chat Service runs on 4000 based on previous setup
-                const res = await axios.get(`http://localhost:4000/api/chat/history/${room}`);
-                setMessages(res.data);
-            } catch (err) {
-                console.error("Failed to load history", err);
-            } finally {
-                setLoadingHistory(false);
-            }
+  const messagesEndRef = useRef(null);
+  const friendsListRef = useRef(null);
+  const mainWrapperRef = useRef(null);
 
-            // Join via Socket
-            socket.emit("join_room", room);
-        };
+  const getRoomId = (a, b) => (a && b ? [a, b].sort().join("_") : null);
 
-        loadHistoryAndJoin();
+  const scrollMessagesToBottom = (smooth = true) => {
+    if (!messagesEndRef.current) return;
+    messagesEndRef.current.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+  };
 
-        // Listen for live messages
-        const handleReceive = (data) => {
-            setMessages((prev) => [...prev, data]);
-        };
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("nomad_dark", dark ? "1" : "0");
+  }, [dark]);
 
-        socket.on("receive_message", handleReceive);
+  useEffect(() => {
+    const saved = localStorage.getItem("nomad_active_chat");
 
-        return () => {
-            socket.off("receive_message", handleReceive);
-            // Optional: Leave room logic if backend supports it
-        };
-    }, [socket, room]);
+    if (state?.friend?.email) {
+      const fEmail = state.friend.email;
+      const fName = state.friend.username || fEmail;
+      setActiveFriend({ email: fEmail, username: fName });
+      localStorage.setItem("nomad_active_chat", JSON.stringify({ friendEmail: fEmail, username: fName }));
+      return;
+    }
 
-    // 3. Auto-scroll
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setActiveFriend({ email: parsed.friendEmail, username: parsed.username || parsed.friendEmail });
+    }
+  }, [state]);
 
-    const sendMessage = async (e) => {
-        e.preventDefault();
-        if (currentMessage.trim() !== "" && socket) {
-            const messageData = {
-                room: room,
-                message: currentMessage,
-            };
-            await socket.emit("send_message", messageData);
-            setCurrentMessage("");
-        }
+  useEffect(() => {
+    const handleResize = () => setIsSidebarOpen(window.innerWidth >= 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        const res = await friendApi.getFriends();
+        setFriends(res.data);
+      } catch (err) {
+        console.error("Failed to fetch friends", err);
+      }
+    };
+    fetchFriends();
+  }, []);
+
+  useEffect(() => {
+    if (!activeFriend?.email || !user?.email) return;
+
+    const roomId = getRoomId(user.email, activeFriend.email);
+
+    const fetchHistory = async () => {
+      try {
+        const res = await axios.get(
+          `http://localhost:4000/api/chat/history/${encodeURIComponent(roomId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setMessages(res.data || []);
+        setTimeout(() => scrollMessagesToBottom(false), 50);
+      } catch (err) {
+        console.error("Failed to load chat history", err);
+      }
+    };
+    fetchHistory();
+
+    if (!socket) return;
+
+    socket.emit("join_room", roomId);
+
+    const handleReceive = (newMsg) => {
+      setMessages((prev) => {
+        // Prevent duplicates by _id, timestamp+content fallback
+        if (newMsg._id && prev.some((m) => m._id === newMsg._id)) return prev;
+        if (prev.some((m) => m.timestamp === newMsg.timestamp && m.content === newMsg.content)) return prev;
+        return [...prev, newMsg];
+      });
+      setTimeout(() => scrollMessagesToBottom(true), 50);
     };
 
-    return (
-        <div className="min-h-screen bg-yellow-50 flex flex-col pb-24 md:pb-0 md:pt-24">
-            <Navbar />
+    const handleTyping = (data) => {
+      if (data?.sender === activeFriend.email) {
+        setIsTyping(true);
+        if (typingTimer.current) clearTimeout(typingTimer.current);
+        typingTimer.current = setTimeout(() => setIsTyping(false), 1200);
+      }
+    };
 
-            <div className="flex-1 max-w-4xl w-full mx-auto md:px-4 flex flex-col h-[calc(100vh-180px)]">
-                
-                {/* Chat Header */}
-                <div className="bg-white border-b-2 border-black p-4 flex justify-between items-center md:rounded-t-3xl md:border-2 md:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sticky top-0 z-30">
-                    <div className="flex items-center">
-                        <div className={`w-12 h-12 border-2 border-black rounded-full flex items-center justify-center mr-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${chatPartner ? 'bg-pink-300' : 'bg-green-400'}`}>
-                            {chatPartner ? <User className="text-white w-6 h-6" /> : <Hash className="text-white w-6 h-6" />}
-                        </div>
-                        <div>
-                            <h2 className="font-black text-xl text-gray-900">
-                                {chatPartner ? chatPartner : "Global Lobby"}
-                            </h2>
-                            <div className="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                                {isConnected ? "Live Signal" : "Connecting..."}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    socket.on("receive_message", handleReceive);
+    socket.on("typing", handleTyping);
 
-                {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-4 bg-white/80 space-y-4 md:border-x-2 md:border-black scroll-smooth">
-                    {loadingHistory && (
-                        <div className="flex justify-center py-4">
-                            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                        </div>
-                    )}
-                    
-                    {messages.map((msg, index) => {
-                        const isMe = msg.sender === user?.username || msg.sender === user?.email || msg.sender === user?.userId;
-                        
-                        return (
-                            <div key={index} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                                <div className={`max-w-[75%] p-3 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] transition-transform hover:-translate-y-1 ${
-                                    isMe 
-                                    ? "bg-black text-white rounded-tr-none" 
-                                    : "bg-white text-gray-900 rounded-tl-none"
-                                }`}>
-                                    {!isMe && <p className="text-[10px] font-bold text-pink-500 mb-1 uppercase tracking-wider">{msg.sender}</p>}
-                                    <p className="font-bold text-sm md:text-base leading-relaxed">{msg.content}</p>
-                                    <p className={`text-[10px] text-right mt-1 font-medium ${isMe ? 'text-gray-400' : 'text-gray-400'}`}>
-                                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                </div>
-                            </div>
-                        );
-                    })}
-                    <div ref={messagesEndRef} />
-                </div>
+    return () => {
+      socket.off("receive_message", handleReceive);
+      socket.off("typing", handleTyping);
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+    };
+  }, [activeFriend, user, token, socket]);
 
-                {/* Input Area */}
-                <div className="p-4 bg-white md:rounded-b-3xl md:border-2 md:border-t-0 md:border-black md:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sticky bottom-20 md:bottom-auto">
-                    <form onSubmit={sendMessage} className="flex space-x-2">
-                        <input
-                            type="text"
-                            value={currentMessage}
-                            onChange={(e) => setCurrentMessage(e.target.value)}
-                            placeholder={chatPartner ? `Message ${chatPartner}...` : "Broadcast to everyone..."}
-                            className="input-sketch w-full bg-gray-50 border-2 border-black rounded-xl focus:ring-0 focus:bg-white transition"
-                        />
-                        <button 
-                            type="submit" 
-                            disabled={!currentMessage.trim()}
-                            className="btn-sketch bg-pink-400 text-white p-3 aspect-square flex items-center justify-center hover:bg-pink-500 disabled:opacity-50 disabled:shadow-none"
-                        >
-                            <Send className="w-6 h-6" />
-                        </button>
-                    </form>
+  const handleSend = (e) => {
+    e.preventDefault();
+    if (!message.trim() || !socket || !activeFriend?.email) return;
+
+    const roomId = getRoomId(user.email, activeFriend.email);
+    const localId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const msgData = {
+      room: roomId,
+      message,
+      sender: user.email,
+      timestamp: new Date().toISOString(),
+      localId,
+    };
+
+    // optimistic add (include localId)
+    setMessages((prev) => [...prev, { ...msgData, content: message }]);
+    setMessage("");
+    scrollMessagesToBottom(true);
+
+    socket.emit("send_message", msgData);
+  };
+
+  const handleTypingEvent = () => {
+    if (!socket || !activeFriend?.email) return;
+    socket.emit("typing", { sender: user.email, receiver: activeFriend.email });
+  };
+
+  const handleSelectFriend = (friend) => {
+    const email = friend.email;
+    const username = friend.username || email;
+    setActiveFriend({ email, username });
+    clearUnread?.(email);
+    localStorage.setItem("nomad_active_chat", JSON.stringify({ friendEmail: email, username }));
+    if (window.innerWidth < 768) setIsSidebarOpen(false);
+    // scroll messages area to top when switching friend (so fetchHistory places messages properly)
+    setTimeout(() => scrollMessagesToBottom(false), 120);
+  };
+
+  /* extra enhancements (reaction popover) */
+  const [showReactionsFor, setShowReactionsFor] = useState(null);
+  const reactions = ["👍", "🔥", "😂", "❤️", "🤔"];
+
+  const addReaction = (msgIndex, emoji) => {
+    setMessages((prev) => {
+      const copy = [...prev];
+      const item = copy[msgIndex];
+      if (!item) return prev;
+      copy[msgIndex] = { ...item, reactions: [...(item.reactions || []), emoji] };
+      return copy;
+    });
+    setShowReactionsFor(null);
+  };
+
+  return (
+    <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-b from-[#fffdf7] to-[#f7f7fb]">
+      <Navbar dark={dark} onToggleDark={() => setDark((d) => !d)} />
+
+      <div className="flex-1 flex w-full max-w-7xl mx-auto md:pt-20 p-3 gap-4 overflow-hidden" ref={mainWrapperRef}>
+        {/* SIDEBAR */}
+        <div
+          className={`absolute md:relative z-20 h-full bg-white rounded-2xl flex flex-col transition-all duration-300 shadow-md border
+            ${isSidebarOpen ? "translate-x-0 w-72" : "-translate-x-full md:translate-x-0 md:w-0 overflow-hidden"}`}
+        >
+          <div className="p-4 bg-[#C7E8FF] rounded-t-2xl flex items-center justify-between border-b border-black/10">
+            <h2 className="font-extrabold">Companions</h2>
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden">
+              <X />
+            </button>
+          </div>
+
+          <div ref={friendsListRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-white">
+            {friends.map((friend) => (
+              <button
+                key={friend.email || friend.id}
+                onClick={() => handleSelectFriend(friend)}
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-shadow text-left
+                  ${activeFriend?.email === friend.email ? "bg-[#E7F0FF] border-indigo-200 shadow-sm" : "bg-white border-gray-200 hover:shadow-sm"}`}
+              >
+                <div className="w-11 h-11 rounded-full bg-[#FEEA7B] border border-black/10 flex items-center justify-center font-bold text-indigo-900">
+                  {(friend.username || friend.email || "U")[0].toUpperCase()}
                 </div>
-            </div>
+                <div className="min-w-0">
+                  <div className="font-semibold truncate text-sm">{friend.username || friend.email}</div>
+                  <div className="text-xs text-slate-500 truncate">{friend.email}</div>
+                </div>
+                {/* online dot (simple heuristic: friend.online true) */}
+                <div className="ml-auto">
+                  {friend.online ? (
+                    <span className="inline-block w-3 h-3 bg-green-500 rounded-full" />
+                  ) : (
+                    <span className="inline-block w-3 h-3 bg-gray-300 rounded-full" />
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
-    );
+
+        {!isSidebarOpen && (
+          <button onClick={() => setIsSidebarOpen(true)} className="absolute left-3 top-28 bg-black text-white p-2 rounded-r-xl md:hidden">
+            <ChevronRight />
+          </button>
+        )}
+
+        {/* CHAT MAIN */}
+        <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-lg border overflow-hidden">
+          {activeFriend ? (
+            <>
+              {/* header */}
+              <div className="p-4 bg-[#C7E8FF] border-b border-black/10 flex items-center gap-3">
+                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2 bg-white rounded-lg border shadow">
+                  <Menu />
+                </button>
+                <div className="w-10 h-10 rounded-full bg-white border flex items-center justify-center font-bold">
+                  {activeFriend.username?.[0]?.toUpperCase() || activeFriend.email?.[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <div className="font-bold">{activeFriend.username}</div>
+                  <div className="text-xs text-slate-600">{activeFriend.email}</div>
+                </div>
+                <div className="ml-auto text-sm text-slate-600">Online</div>
+              </div>
+
+              {/* messages area (ONLY scrollable area) */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#FFFDF7]">
+                {messages.map((msg, idx) => {
+                  const isMe = msg.sender === user.email;
+                  return (
+                    <div key={msg._id || msg.localId || idx} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                      <div className="relative max-w-[78%]">
+                        <div
+                          className={`px-4 py-3 rounded-2xl shadow-[3px_3px_0px_#d0d0d0] border text-sm
+                            ${isMe ? "bg-[#FADA7A] rounded-tr-none border-yellow-300" : "bg-white rounded-tl-none border-gray-200"}`}
+                        >
+                          <div className="whitespace-pre-wrap">{msg.content}</div>
+
+                          <div className="flex items-center justify-end gap-2 mt-2">
+                            <span className="text-[10px] opacity-60">{new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            <button
+                              onClick={() => setShow ? null : null}
+                              className="text-[12px] text-slate-600 hover:text-slate-800"
+                              aria-label="react"
+                            >
+                              <Smile className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* reaction popover */}
+                        <div className="absolute -bottom-8 left-0 flex gap-2">
+                          {msg.reactions?.slice(-3).map((r, i) => (
+                            <div key={i} className="px-2 py-1 bg-white border rounded-full text-xs shadow-sm">{r}</div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {isTyping && <TypingIndicator name={activeFriend.username} />}
+
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* input fixed at bottom of chat panel */}
+              <form onSubmit={handleSend} className="p-4 border-t bg-white flex gap-3 items-center">
+                <input
+                  value={message}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    handleTypingEvent();
+                  }}
+                  placeholder="Write something..."
+                  className="flex-1 rounded-2xl px-4 py-3 border border-black/10 bg-white focus:ring-2 focus:ring-yellow-300"
+                />
+
+                <button type="submit" className="bg-[#6C63FF] hover:bg-[#5950d1] text-white px-4 py-2 rounded-2xl flex items-center gap-2">
+                  <CuteSendIcon />
+                  <span className="font-semibold">Send</span>
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold">Nomad Chat</h2>
+                <p className="text-slate-600 mt-2">Select a companion to start chatting</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Chat;

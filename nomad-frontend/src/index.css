@@ -37,3 +37,10 @@ body {
   border-radius: 4px;
   border: 1px solid white;
 }
+.cute-plane {
+  transition: transform 0.25s ease;
+}
+
+.cute-plane:hover {
+  transform: translateX(4px) rotate(5deg);
+}

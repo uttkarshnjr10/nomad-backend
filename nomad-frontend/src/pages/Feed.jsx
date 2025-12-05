@@ -55,6 +55,7 @@ const Feed = () => {
             fetchFeed(); 
         } catch (error) {
             toast.error("Failed to drop post.");
+            console.log(error);
         } finally {
             setIsUploading(false);
         }
