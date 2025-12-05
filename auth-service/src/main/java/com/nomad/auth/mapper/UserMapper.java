@@ -3,17 +3,32 @@ package com.nomad.auth.mapper;
 import com.nomad.auth.domain.User;
 import com.nomad.auth.dto.AuthResponse;
 import com.nomad.auth.dto.RegisterRequest;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.ReportingPolicy;
+import org.springframework.stereotype.Component;
 
-@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
-public interface UserMapper {
+@Component
+public class UserMapper {
 
-    @Mapping(target = "password", ignore = true)
-    User toEntity(RegisterRequest request);
+    public User toEntity(RegisterRequest request) {
+        if (request == null) {
+            return null;
+        }
 
-    // Explicitly map the User's 'id' to the Response's 'userId'
-    @Mapping(source = "user.id", target = "userId")
-    AuthResponse toResponse(User user, String token);
+        return User.builder()
+                .username(request.username())
+                .email(request.email())
+                .build();
+    }
+
+    public AuthResponse toResponse(User user, String token) {
+        if (user == null) {
+            return null;
+        }
+
+        return new AuthResponse(
+                token,
+                user.getId(),
+                user.getUsername(),
+                user.getEmail()
+        );
+    }
 }

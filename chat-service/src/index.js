@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import dotenv from "dotenv";
+import cors from "cors"; 
 import connectDB from "./db/index.js";
 import { socketAuth } from "./middlewares/socketAuth.js";
 import { Message } from "./models/message.model.js";
@@ -10,6 +11,9 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
+
+app.use(cors({ origin: "*" }));
+app.use(express.json());
 
 const io = new Server(httpServer, {
     cors: {
@@ -20,49 +24,56 @@ const io = new Server(httpServer, {
 
 connectDB();
 
+
+app.get("/api/chat/history/:room", async (req, res) => {
+    try {
+        const { room } = req.params;
+        // Fetch last 50 messages, sorted by time
+        const messages = await Message.find({ room })
+            .sort({ timestamp: 1 }) 
+            .limit(50);
+        
+        res.json(messages);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch history" });
+    }
+});
+
+// 3. Socket Logic
 io.use(socketAuth);
 
 io.on("connection", (socket) => {
-    console.log(`🔌 User Connected: ${socket.user.sub} (Socket ID: ${socket.id})`);
+    console.log(`🔌 Connected: ${socket.user.sub}`);
 
     socket.on("join_room", (room) => {
         socket.join(room);
-        console.log(`User ${socket.user.sub} joined room: ${room}`);
+        console.log(`Joined Room: ${room}`);
     });
-e
-    socket.on("send_message", async (data) => {
-       
-        const { room, message } = data;
 
-        // Save to DB
+    socket.on("send_message", async (data) => {
+        const { room, message } = data;
+        
+        // save to DB
         const newMessage = await Message.create({
-            sender: socket.user.sub,
+            sender: socket.user.sub, // username/Email from Token
             room: room,
             content: message,
             type: "TEXT"
         });
 
-        // Broadcast to everyone in that room including sender
+        // broadcast with the saved object 
         io.to(room).emit("receive_message", newMessage);
     });
 
-    // Theme Switching
     socket.on("change_theme", async (data) => {
         const { room, theme } = data;
-        // Save this system event to DB history
         await Message.create({
             sender: socket.user.sub,
             room: room,
             content: theme,
             type: "THEME_CHANGE"
         });
-
-        // Broadcast "theme_updated" to everyone so their UI changes color instantly
         io.to(room).emit("theme_updated", { theme, updatedBy: socket.user.sub });
-    });
-
-    socket.on("disconnect", () => {
-        console.log("User Disconnected", socket.id);
     });
 });
 

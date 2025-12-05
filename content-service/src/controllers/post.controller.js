@@ -16,10 +16,12 @@ const createPost = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Image/Video file is required");
     }
 
+    const normalizedPath = localFilePath.replace(/\\/g, "/");
+
     const post = await Post.create({
         userId: req.user.username,
         username: req.user.username,
-        contentUrl: localFilePath,
+        contentUrl: normalizedPath, 
         caption,
         location: {
             type: "Point",
@@ -64,13 +66,12 @@ const toggleLike = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid Post ID");
     }
 
-    
     const post = await Post.findByIdAndUpdate(
         postId,
         { 
-            $inc: { "fuel.likes": 1 } // Increment likes by 1
+            $inc: { "fuel.likes": 1 } 
         },
-        { new: true } // Return the updated document
+        { new: true } 
     );
 
     if (!post) {
