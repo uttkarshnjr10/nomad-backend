@@ -34,9 +34,15 @@ connectDB();
 app.get("/api/chat/history/:room", async (req, res) => {
     try {
         const { room } = req.params;
-        const messages = await Message.find({ room }).sort({ timestamp: 1 });
+       
+        const messages = await Message.find({ room })
+            .sort({ timestamp: 1 })
+            .limit(500) 
+            .lean();
+            
         res.json(messages);
     } catch (error) {
+        console.error("History fetch error:", error);
         res.status(500).json({ error: "Failed to fetch history" });
     }
 });
@@ -45,7 +51,6 @@ io.use(socketAuth);
 
 io.on("connection", (socket) => {
     const userEmail = socket.user?.sub;
-    const userId = socket.user?.userId;
 
     socket.join(userEmail);
 
@@ -68,7 +73,7 @@ io.on("connection", (socket) => {
 
             io.to(room).emit("receive_message", newMessage);
 
-            const parts = room.split("_");
+            const parts = room.split("--");
             const recipientEmail = parts.find(email => email !== senderEmail);
 
             if (recipientEmail) {

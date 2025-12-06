@@ -12,12 +12,18 @@ export const SocketProvider = ({ children }) => {
   const totalUnread = Object.values(unreadMessages).reduce((a, b) => a + b, 0);
 
   useEffect(() => {
-    console.log("SocketProvider effect: token:", token, "user:", user);
+    if (socket) {
+      socket.disconnect();
+      setSocket(null);
+      setIsConnected(false);
+    }
 
-    if (token && user?.email && !socket) {
+    if (token && user?.email) {
+      console.log("Initializing socket...");
+      
       const newSocket = io(import.meta.env.VITE_CHAT_SOCKET_URL, {
         auth: { token },
-        transports: ["websocket"],
+        transports: ["websocket"], 
         upgrade: true,
       });
 
@@ -27,34 +33,29 @@ export const SocketProvider = ({ children }) => {
       });
 
       newSocket.on("disconnect", (reason) => {
-        console.log(" Socket disconnected:", reason);
+        console.log("🔴 Socket disconnected:", reason);
         setIsConnected(false);
       });
 
       newSocket.on("connect_error", (err) => {
-        console.error(" connect_error:", err && err.message ? err.message : err);
-      });
-
-      newSocket.on("error", (err) => {
-        console.error("⚠ socket error:", err);
+        console.error("⚠ connect_error:", err.message);
       });
 
       newSocket.on("notification", (data) => {
-        console.log(" notification received:", data);
+        console.log("🔔 Notification:", data);
         const sender = data.senderEmail || data.sender;
         if (!sender) return;
         setUnreadMessages((prev) => ({ ...prev, [sender]: (prev[sender] || 0) + 1 }));
       });
 
       setSocket(newSocket);
-    }
 
-    if (!token && socket) {
-      console.log("token cleared, disconnecting socket");
-      socket.disconnect();
-      setSocket(null);
+      return () => {
+        console.log("Cleaning up socket...");
+        newSocket.disconnect();
+      };
     }
-  }, [token, user]);
+  }, [token, user]); 
 
   const clearUnread = (friendEmail) => {
     setUnreadMessages((prev) => {
