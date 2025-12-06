@@ -4,6 +4,7 @@
   padding: 2rem;
   text-align: center;
 }
+@import "./styles/chatAnimations.css";
 
 .logo {
   height: 6em;

@@ -1,0 +1,57 @@
+/* Soft bubble pop when a message appears */
+@keyframes bubblePop {
+  0% { transform: scale(0.85) translateY(8px); opacity: 0; }
+  60% { transform: scale(1.05) translateY(0); opacity: 1; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+
+.bubble-pop {
+  animation: bubblePop 0.28s ease-out;
+}
+
+
+.cute-hover {
+  transition: 0.2s ease;
+}
+
+.cute-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0px 4px 10px rgba(230, 210, 140, 0.3);
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(3deg); }
+  75% { transform: rotate(-3deg); }
+}
+
+.send-wiggle:active svg {
+  animation: wiggle 0.25s ease-in-out;
+}
+
+@keyframes floatDot {
+  0% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(-4px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0.5; }
+}
+
+.typing-dot:nth-child(1) { animation: floatDot 0.9s infinite; }
+.typing-dot:nth-child(2) { animation: floatDot 0.9s infinite 0.15s; }
+.typing-dot:nth-child(3) { animation: floatDot 0.9s infinite 0.3s; }
+
+@keyframes sparkle {
+  0% { transform: scale(0.4) translateY(0); opacity: 0; }
+  50% { transform: scale(1) translateY(-6px); opacity: 1; }
+  100% { transform: scale(0.4) translateY(-12px); opacity: 0; }
+}
+
+.sparkle {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  width: 6px;
+  height: 6px;
+  background: #ffe57f;
+  border-radius: 50%;
+  animation: sparkle 0.7s ease-out forwards;
+}

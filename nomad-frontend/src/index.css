@@ -44,3 +44,5 @@ body {
 .cute-plane:hover {
   transform: translateX(4px) rotate(5deg);
 }
+@import "./styles/chatAnimations.css";
+
