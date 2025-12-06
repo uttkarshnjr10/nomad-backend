@@ -10,84 +10,105 @@ export default function useChatLogic() {
   const { socket, clearUnread } = useSocket();
 
   const [dark, setDark] = useState(() => localStorage.getItem("nomad_dark") === "1");
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("nomad_dark", dark ? "1" : "0");
-  }, [dark]);
+  const [activeFriend, setActiveFriend] = useState(() => {
+    const saved = localStorage.getItem("nomad_active_chat");
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      return { email: parsed.friendEmail, username: parsed.username || parsed.friendEmail };
+    } catch {
+      return null;
+    }
+  });
 
-  const [activeFriend, setActiveFriend] = useState(null);
   const [friends, setFriends] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
-  const typingTimer = useRef(null);
 
+  const typingTimer = useRef(null);
   const messagesEndRef = useRef(null);
   const friendsListRef = useRef(null);
 
-  const getHistory = useCallback(
-  async (roomId) => {
-    try {
-      const API_BASE = import.meta.env.VITE_API_URL;
+  const scrollMessagesToBottom = (smooth = true) => {
+    if (!messagesEndRef.current) return;
+    messagesEndRef.current.scrollIntoView({
+      behavior: smooth ? "smooth" : "auto",
+    });
+  };
 
-      const res = await axios.get(
-        `${API_BASE}/api/chat/history/${encodeURIComponent(roomId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      setMessages(res.data || []);
-      setTimeout(() => scrollMessagesToBottom(false), 50);
-    } catch (e) {}
-  },
-  [token]
-);
-
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("nomad_dark", dark ? "1" : "0");
+  }, [dark]);
 
   useEffect(() => {
     const fetchFriends = async () => {
       try {
         const res = await friendApi.getFriends();
         setFriends(res.data || []);
-      } catch (e) {
-        // console.log('failed to fetch friends', e)
-      }
+        // console.log("friends loaded");
+      } catch {}
     };
     fetchFriends();
   }, []);
 
-  const scrollMessagesToBottom = (smooth = true) => {
-    if (!messagesEndRef.current) return;
-    messagesEndRef.current.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-  };
-
-  useEffect(() => {
-    const saved = localStorage.getItem("nomad_active_chat");
-    if (saved) {
+  const getHistory = useCallback(
+    async (roomId) => {
       try {
-        const parsed = JSON.parse(saved);
-        setActiveFriend({ email: parsed.friendEmail, username: parsed.username || parsed.friendEmail });
-      } catch (e) {
-        // console.log('failed to parse saved chat', e)
-      }
-    }
-  }, []);
+        const API = import.meta.env.VITE_API_URL;
+        const res = await axios.get(`${API}/api/chat/history/${encodeURIComponent(roomId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setMessages(res.data || []);
+        setTimeout(() => scrollMessagesToBottom(false), 50);
+        // console.log("history loaded");
+      } catch {}
+    },
+    [token]
+  );
 
   useEffect(() => {
     if (!activeFriend?.email || !user?.email) return;
+
     const roomId = getRoomId(user.email, activeFriend.email);
     getHistory(roomId);
+
     if (!socket) return;
+
     socket.emit("join_room", roomId);
-    // console.log('socket joined', roomId)
+    // console.log("joined room", roomId);
 
     const handleReceive = (newMsg) => {
       setMessages((prev) => {
+        const localMatchIndex = prev.findIndex(
+          (m) => m.localId && m.localId === newMsg.localId
+        );
+
+        if (localMatchIndex !== -1) {
+          const copy = [...prev];
+          copy[localMatchIndex] = newMsg;
+          return copy;
+        }
+
         if (newMsg._id && prev.some((m) => m._id === newMsg._id)) return prev;
-        if (prev.some((m) => m.timestamp === newMsg.timestamp && m.content === newMsg.content)) return prev;
+
+        if (
+          prev.some(
+            (m) =>
+              m.content === newMsg.content &&
+              Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 1000
+          )
+        ) {
+          return prev;
+        }
+
         return [...prev, newMsg];
       });
+
       setTimeout(() => scrollMessagesToBottom(true), 50);
+      // console.log("message received");
     };
 
     const handleTyping = (data) => {
@@ -108,12 +129,13 @@ export default function useChatLogic() {
     };
   }, [activeFriend, user, socket, getHistory]);
 
-  const sendMessage = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
+  const sendMessage = (e) => {
+    if (e?.preventDefault) e.preventDefault();
     if (!message.trim() || !socket || !activeFriend?.email) return;
 
     const room = getRoomId(user.email, activeFriend.email);
     const localId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     const msgData = {
       room,
       message,
@@ -124,11 +146,12 @@ export default function useChatLogic() {
     };
 
     setMessages((prev) => [...prev, msgData]);
+
     setMessage("");
     scrollMessagesToBottom(true);
 
     socket.emit("send_message", msgData);
-    // console.log('sent message', msgData.localId)
+    // console.log("sent", localId);
   };
 
   const handleTyping = () => {
@@ -141,7 +164,10 @@ export default function useChatLogic() {
       const copy = [...prev];
       const item = copy[msgIndex];
       if (!item) return prev;
-      copy[msgIndex] = { ...item, reactions: [...(item.reactions || []), emoji] };
+      copy[msgIndex] = {
+        ...item,
+        reactions: [...(item.reactions || []), emoji],
+      };
       return copy;
     });
   };

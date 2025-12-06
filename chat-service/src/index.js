@@ -60,7 +60,7 @@ io.on("connection", (socket) => {
 
     socket.on("send_message", async (data) => {
         try {
-            const { room, message } = data;
+            const { room, message, localId } = data; 
             const senderEmail = userEmail;
 
             const newMessage = await Message.create({
@@ -71,17 +71,23 @@ io.on("connection", (socket) => {
                 timestamp: new Date()
             });
 
-            io.to(room).emit("receive_message", newMessage);
+            const messageToSend = newMessage.toObject ? newMessage.toObject() : newMessage;
+            messageToSend.localId = localId;
 
-            const parts = room.split("--");
-            const recipientEmail = parts.find(email => email !== senderEmail);
+            io.to(room).emit("receive_message", messageToSend);
 
-            if (recipientEmail) {
-                io.to(recipientEmail).emit("notification", {
-                    senderEmail,
-                    content: message,
-                    room
-                });
+            const parts = room.split("--"); 
+
+            if (parts.length === 2) {
+                const recipientEmail = parts.find(email => email !== senderEmail);
+                
+                if (recipientEmail && recipientEmail !== senderEmail) {
+                    io.to(recipientEmail).emit("notification", {
+                        senderEmail,
+                        content: message,
+                        room
+                    });
+                }
             }
         } catch (err) {
             console.error("send_message error:", err);
