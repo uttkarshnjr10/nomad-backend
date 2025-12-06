@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # ---------------------------
+  # DATABASES
+  # ---------------------------
+  auth-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: nomad_auth
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nomad-network
+
+  mongo:
+    image: mongo:6.0
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - nomad-network
+
+  # ---------------------------
+  # BACKEND SERVICES
+  # ---------------------------
+  auth-service:
+    build: ./auth-service
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://auth-db:5432/nomad_auth
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+    depends_on:
+      - auth-db
+    networks:
+      - nomad-network
+
+  chat-service:
+    build: ./chat-service
+    restart: on-failure
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      MONGO_URI: mongodb://mongo:27017/nomad_chat
+      CLIENT_URL: ${ALLOWED_ORIGINS}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      - mongo
+    networks:
+      - nomad-network
+
+  content-service:
+    build: ./content-service
+    restart: on-failure
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      MONGO_URI: mongodb://mongo:27017/nomad_content
+      CORS_ORIGIN: ${ALLOWED_ORIGINS}
+      # If your content service verifies tokens, it needs the secret too
+      JWT_SECRET: ${JWT_SECRET} 
+    depends_on:
+      - mongo
+    networks:
+      - nomad-network
+
+  # ---------------------------
+  # FRONTEND
+  # ---------------------------
+  frontend:
+    build:
+      context: ./nomad-frontend
+      args:
+        VITE_AUTH_API_URL: ${VITE_AUTH_API_URL}
+        VITE_CONTENT_API_URL: ${VITE_CONTENT_API_URL}
+        VITE_CHAT_SOCKET_URL: ${VITE_CHAT_SOCKET_URL}
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - chat-service
+      - content-service
+    networks:
+      - nomad-network
+
+networks:
+  nomad-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:

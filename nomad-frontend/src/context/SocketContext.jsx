@@ -15,7 +15,7 @@ export const SocketProvider = ({ children }) => {
     console.log("SocketProvider effect: token:", token, "user:", user);
 
     if (token && user?.email && !socket) {
-      const newSocket = io("http://localhost:4000", {
+      const newSocket = io(import.meta.env.VITE_CHAT_SOCKET_URL, {
         auth: { token },
         transports: ["websocket"],
         upgrade: true,
@@ -27,12 +27,12 @@ export const SocketProvider = ({ children }) => {
       });
 
       newSocket.on("disconnect", (reason) => {
-        console.log("🔴 Socket disconnected:", reason);
+        console.log(" Socket disconnected:", reason);
         setIsConnected(false);
       });
 
       newSocket.on("connect_error", (err) => {
-        console.error("⛔ connect_error:", err && err.message ? err.message : err);
+        console.error(" connect_error:", err && err.message ? err.message : err);
       });
 
       newSocket.on("error", (err) => {
@@ -40,7 +40,7 @@ export const SocketProvider = ({ children }) => {
       });
 
       newSocket.on("notification", (data) => {
-        console.log("🔔 notification received:", data);
+        console.log(" notification received:", data);
         const sender = data.senderEmail || data.sender;
         if (!sender) return;
         setUnreadMessages((prev) => ({ ...prev, [sender]: (prev[sender] || 0) + 1 }));

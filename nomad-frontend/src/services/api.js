@@ -1,12 +1,15 @@
 import axios from 'axios';
 
-// Base Axios Instance
+const AUTH_BASE_URL = import.meta.env.VITE_AUTH_API_URL;
+const CONTENT_BASE_URL = import.meta.env.VITE_CONTENT_API_URL;
+
+
 export const api = axios.create({
-    baseURL: 'http://localhost:8080/api',
+    baseURL: AUTH_BASE_URL,
     headers: { 'Content-Type': 'application/json' }
 });
 
-// Token Interceptor 
+
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('nomad_token');
 
@@ -17,13 +20,12 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// AUTH SERVICE 
+
 export const authService = {
     login: (data) => api.post('/auth/login', data),
     register: (data) => api.post('/auth/register', data),
 };
 
-// Spring Boot
 export const friendApi = {
     search: (query) => api.get(`/friends/search?query=${query}`),
     sendRequest: (id) => api.post(`/friends/request/${id}`),
@@ -32,10 +34,12 @@ export const friendApi = {
     getFriends: () => api.get('/friends'),
 };
 
+
 export const contentApi = axios.create({
-    baseURL: 'http://localhost:3000/api/v1/posts',
+    baseURL: CONTENT_BASE_URL,
 });
 
+// Token interceptor for content service
 contentApi.interceptors.request.use((config) => {
     const token = localStorage.getItem('nomad_token');
     if (token && token !== 'null' && token !== 'undefined') {
@@ -44,5 +48,5 @@ contentApi.interceptors.request.use((config) => {
     return config;
 });
 
-// Export main Spring client if needed elsewhere
+
 export { api as authApi };
