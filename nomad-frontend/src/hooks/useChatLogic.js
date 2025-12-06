@@ -27,20 +27,22 @@ export default function useChatLogic() {
   const friendsListRef = useRef(null);
 
   const getHistory = useCallback(
-    async (roomId) => {
-      try {
-        const res = await axios.get(
-          `http://localhost:4000/api/chat/history/${encodeURIComponent(roomId)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setMessages(res.data || []);
-        setTimeout(() => scrollMessagesToBottom(false), 50);
-      } catch (e) {
-        // console.log('failed to fetch history', e)
-      }
-    },
-    [token]
-  );
+  async (roomId) => {
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL;
+
+      const res = await axios.get(
+        `${API_BASE}/api/chat/history/${encodeURIComponent(roomId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setMessages(res.data || []);
+      setTimeout(() => scrollMessagesToBottom(false), 50);
+    } catch (e) {}
+  },
+  [token]
+);
+
 
   useEffect(() => {
     const fetchFriends = async () => {
