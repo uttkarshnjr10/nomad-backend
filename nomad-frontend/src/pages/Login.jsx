@@ -2,17 +2,23 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Mail, Lock } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Plane } from 'lucide-react'; // Added icons
 import loginIllustration from '../assets/login-illustration.png'; 
 
 const Login = () => {
     const [formData, setFormData] = useState({ email: '', password: '' });
+    const [isLoading, setIsLoading] = useState(false); // Loading state
+    const [showPassword, setShowPassword] = useState(false); // Password visibility state
+    
     const { login } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsLoading(true); // Start animation
         
+        // Simulate a tiny delay so the cute animation is visible for at least a moment
+        // (Optional, you can remove the setTimeout wrapper if you want instant response)
         const result = await login(formData.email, formData.password);
         
         if (result.success) {
@@ -20,6 +26,7 @@ const Login = () => {
             navigate('/');
         } else {
             toast.error(result.message);
+            setIsLoading(false); // Stop animation on error
         }
     };
 
@@ -44,6 +51,7 @@ const Login = () => {
                     </h2>
                     
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Email Field */}
                         <div>
                             <label className="block text-sm font-bold text-gray-600 mb-2 ml-2">Email</label>
                             <div className="relative">
@@ -57,10 +65,12 @@ const Login = () => {
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     required
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
                         
+                        {/* Password Field */}
                         <div>
                             <label className="block text-sm font-bold text-gray-600 mb-2 ml-2">Password</label>
                             <div className="relative">
@@ -68,13 +78,26 @@ const Login = () => {
                                     <Lock className="h-5 w-5 text-pink-400" />
                                 </div>
                                 <input
-                                    type="password"
-                                    className="block w-full pl-10 pr-3 py-3 border-2 border-pink-200 rounded-2xl focus:ring-pink-300 focus:border-pink-300 sm:text-sm font-medium transition duration-200"
+                                    type={showPassword ? "text" : "password"} // Toggles type
+                                    className="block w-full pl-10 pr-10 py-3 border-2 border-pink-200 rounded-2xl focus:ring-pink-300 focus:border-pink-300 sm:text-sm font-medium transition duration-200"
                                     placeholder="••••••••"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                     required
+                                    disabled={isLoading}
                                 />
+                                {/* Show/Hide Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-pink-400 hover:text-pink-600 focus:outline-none cursor-pointer transition-transform hover:scale-110"
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="h-5 w-5" />
+                                    ) : (
+                                        <Eye className="h-5 w-5" />
+                                    )}
+                                </button>
                             </div>
                         </div>
 
@@ -86,9 +109,18 @@ const Login = () => {
 
                         <button
                             type="submit"
-                            className="w-full bg-pink-400 text-white py-3 px-4 rounded-2xl hover:bg-pink-500 transition duration-300 font-extrabold text-lg shadow-md hover:shadow-lg transform hover:-translate-y-1"
+                            disabled={isLoading}
+                            className={`w-full bg-pink-400 text-white py-3 px-4 rounded-2xl hover:bg-pink-500 transition duration-300 font-extrabold text-lg shadow-md hover:shadow-lg transform ${isLoading ? 'cursor-not-allowed opacity-90' : 'hover:-translate-y-1'}`}
                         >
-                            Log In
+                            {isLoading ? (
+                                <div className="flex items-center justify-center gap-2">
+                                    {/* Bouncing Plane Animation */}
+                                    <Plane className="w-6 h-6 animate-bounce" /> 
+                                    <span>Taking Off...</span>
+                                </div>
+                            ) : (
+                                "Log In"
+                            )}
                         </button>
                     </form>
 

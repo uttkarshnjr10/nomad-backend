@@ -19,13 +19,11 @@ spring:
     enabled: true
     baseline-on-migrate: true
 
+application:
+  security:
+    allowed-origins: ${ALLOWED_ORIGINS}
+
 security:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION}
-
-    application:
-      security:
-        allowed-origins:
-          - "http://localhost:5173"
-          - "https://your-production-frontend.com"
