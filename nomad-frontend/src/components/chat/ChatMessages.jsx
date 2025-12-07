@@ -1,4 +1,4 @@
-import React, { useRef, useLayoutEffect, useEffect, useMemo } from "react";
+import React, { useRef, useLayoutEffect, useState } from "react";
 import MessageBubble from "./MessageBubble";
 
 const ChatMessages = ({
@@ -15,15 +15,8 @@ const ChatMessages = ({
   const previousScrollHeightRef = useRef(0);
   const isFirstLoad = useRef(true);
 
-  // 1. Fix: Stabilize the messages array dependency using useMemo
-  const safeMessages = useMemo(() => Array.isArray(messages) ? messages : [], [messages]);
-
-  // 2. Fix: Reset isFirstLoad on unmount to handle Strict Mode/Re-mounting correctly
-  useEffect(() => {
-    return () => {
-      isFirstLoad.current = true;
-    };
-  }, []);
+  // Ensure safe array
+  const safeMessages = Array.isArray(messages) ? messages : [];
 
   // SCROLL LOGIC
   useLayoutEffect(() => {
@@ -32,19 +25,22 @@ const ChatMessages = ({
     const { scrollHeight, scrollTop, clientHeight } = containerRef.current;
     const currentScrollHeight = scrollHeight;
 
-    // A. Handling "Load Previous" (History)
+    // 1. Handling "Load Previous" (History)
+    // If height increased significantly AND we have a record of previous height
     if (previousScrollHeightRef.current > 0 && currentScrollHeight > previousScrollHeightRef.current) {
       const diff = currentScrollHeight - previousScrollHeightRef.current;
       containerRef.current.scrollTop = diff; // Maintain visual position
       previousScrollHeightRef.current = 0;   // Reset
     } 
-    // B. Handling New Messages / Initial Load
+    // 2. Handling New Messages / Initial Load
     else {
       const lastMessage = safeMessages[safeMessages.length - 1];
       const isOwnMessage = lastMessage?.sender === userEmail;
 
       // Calculate if user was near the bottom before the new message arrived
-      // We allow a threshold of 200px (approx 2-3 messages height)
+      // We assume "near" is within 150px of the bottom (approx height of a message bubble)
+      // Note: Since this runs after render, scrollHeight includes the NEW message. 
+      // So we check if we are essentially looking at the bottom minus the new content.
       const distanceFromBottom = currentScrollHeight - scrollTop - clientHeight;
       const wasNearBottom = distanceFromBottom < 200; 
 
@@ -53,10 +49,7 @@ const ChatMessages = ({
       }
     }
 
-    // Only mark first load as complete if we actually have messages
-    if (safeMessages.length > 0) {
-      isFirstLoad.current = false;
-    }
+    isFirstLoad.current = false;
   }, [safeMessages, userEmail]); 
 
   // Handle Scrolling to Top (Trigger Load More)

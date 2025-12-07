@@ -68,7 +68,7 @@ const Chat = () => {
           </div>
         </div>
 
-        {/* Toggle Button for Mobile */}
+
         {!isSidebarOpen && !activeFriend && (
           <button 
             onClick={() => setIsSidebarOpen(true)} 
@@ -82,7 +82,6 @@ const Chat = () => {
         <div className={`flex-1 flex flex-col bg-white md:rounded-2xl shadow-sm border overflow-hidden ${!activeFriend ? "hidden md:flex" : "flex"}`}>
           {activeFriend ? (
             <>
-              {/* Header Fix: Ensure it's rendered with data */}
               <div className="z-10 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-sm shrink-0">
                 <ChatHeader 
                     activeFriend={activeFriend} 

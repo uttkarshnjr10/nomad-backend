@@ -4,7 +4,7 @@ import { authService } from '../services/api';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-    // 1. Load User from Storage on boot
+    // Load User from Storage on boot
     const [token, setToken] = useState(localStorage.getItem('nomad_token'));
     const [user, setUser] = useState(() => {
         const savedUser = localStorage.getItem('nomad_user');

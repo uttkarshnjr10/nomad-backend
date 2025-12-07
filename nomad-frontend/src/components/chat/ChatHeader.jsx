@@ -1,10 +1,7 @@
 import React from "react";
 
 const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
-  // Debug: Check console to see what data is actually arriving
-  // console.log("ChatHeader received friend:", activeFriend);
 
-  // ROBUST NAME LOGIC: Check all possible properties including 'name'
   const displayName = 
     activeFriend?.username || 
     activeFriend?.fullName || 
@@ -30,7 +27,6 @@ const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
           <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-white">
             {initial}
           </div>
-          {/* Online Dot */}
           <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
         </div>
 
