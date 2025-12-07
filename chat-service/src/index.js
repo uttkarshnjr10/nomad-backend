@@ -5,106 +5,42 @@ import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./db/index.js";
 import { socketAuth } from "./middlewares/socketAuth.js";
-import { Message } from "./models/message.model.js";
+import chatRoutes from "./routes/chatRoutes.js";
+import { handleSocketConnection } from "./handlers/socketHandler.js";
 
 dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
 
-app.use(
-    cors({
-        origin: process.env.CLIENT_URL,
-        credentials: true
-    })
-);
+    app.use(
+        cors({
+            origin: process.env.CLIENT_URL,
+            credentials: true
+        })
+    );
 
-app.use(express.json());
+    app.use(express.json());
 
-const io = new Server(httpServer, {
-    cors: {
-        origin: process.env.CLIENT_URL,
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
+    app.use("/api/chat", chatRoutes);
 
-connectDB();
-
-app.get("/api/chat/history/:room", async (req, res) => {
-    try {
-        const { room } = req.params;
-        const { before } = req.query;
-        const limit = 20;
-
-        const query = { room };
-
-        if (before) {
-            query.timestamp = { $lt: new Date(before) };
-        }
-
-        const messages = await Message.find(query)
-            .sort({ timestamp: -1 }) 
-            .limit(limit)
-            .lean();
-
-        res.json(messages.reverse());
-    } catch (error) {
-        console.error("History error:", error);
-        res.status(500).json({ error: "Failed to fetch history" });
-    }
-});
-
-
-io.use(socketAuth);
-
-io.on("connection", (socket) => {
-    const userEmail = socket.user?.sub;
-
-    socket.join(userEmail);
-
-    socket.on("join_room", (room) => {
-        socket.join(room);
-    });
-
-    socket.on("send_message", async (data) => {
-        try {
-            const { room, message, localId } = data; 
-            const senderEmail = userEmail;
-
-            const newMessage = await Message.create({
-                sender: senderEmail,
-                room,
-                content: message,
-                type: "TEXT",
-                timestamp: new Date()
-            });
-
-            const messageToSend = newMessage.toObject ? newMessage.toObject() : newMessage;
-            messageToSend.localId = localId;
-
-            io.to(room).emit("receive_message", messageToSend);
-
-            const parts = room.split("--"); 
-
-            if (parts.length === 2) {
-                const recipientEmail = parts.find(email => email !== senderEmail);
-                
-                if (recipientEmail && recipientEmail !== senderEmail) {
-                    io.to(recipientEmail).emit("notification", {
-                        senderEmail,
-                        content: message,
-                        room
-                    });
-                }
-            }
-        } catch (err) {
-            console.error("send_message error:", err);
+    const io = new Server(httpServer, {
+        cors: {
+            origin: process.env.CLIENT_URL,
+            methods: ["GET", "POST"],
+            credentials: true
         }
     });
-});
 
-const PORT = process.env.PORT || 4000;
-httpServer.listen(PORT, () => {
-    console.log(`Chat Service running on port ${PORT}`);
-});
+    connectDB();
+
+    io.use(socketAuth);
+
+    io.on("connection", (socket) => {
+        handleSocketConnection(io, socket);
+    });
+
+    const PORT = process.env.PORT || 4000;
+    httpServer.listen(PORT, () => {
+        console.log(`Chat Service running on port ${PORT}`);
+    });

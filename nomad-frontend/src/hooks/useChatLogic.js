@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
@@ -9,11 +9,6 @@ export default function useChatLogic(activeFriend) {
   const { socket, clearUnread } = useSocket();
 
   const [dark, setDark] = useState(() => localStorage.getItem("nomad_dark") === "1");
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("nomad_dark", dark ? "1" : "0");
-  }, [dark]);
-
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -21,77 +16,71 @@ export default function useChatLogic(activeFriend) {
   const [hasMore, setHasMore] = useState(true);
 
   const typingTimer = useRef(null);
-  
 
+  const userEmail = user?.email;
+  const friendEmail = activeFriend?.email;
 
-  const getHistory = useCallback(async (roomId, beforeTimestamp = null) => {
-    if (!token) return;
+  const roomId = (userEmail && friendEmail) ? getRoomId(userEmail, friendEmail) : null;
+
+  // Fetch History
+  const getHistory = useCallback(async (room, beforeTimestamp = null) => {
+    if (!token || !room) return;
     try {
       setIsLoadingHistory(true);
       const API_BASE = import.meta.env.VITE_API_URL;
       const query = beforeTimestamp ? `?before=${beforeTimestamp}` : "";
 
       const res = await axios.get(
-        `${API_BASE}/api/chat/history/${encodeURIComponent(roomId)}${query}`,
+        `${API_BASE}/api/chat/history/${encodeURIComponent(room)}${query}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      let fetchedMessages = [];
-      if (Array.isArray(res.data)) fetchedMessages = res.data;
-      else if (res.data?.data) fetchedMessages = res.data.data;
+      let fetchedMessages = Array.isArray(res.data) ? res.data : (res.data?.data || []);
 
       if (fetchedMessages.length < 20) setHasMore(false);
 
-      if (beforeTimestamp) {
-        setMessages(prev => [...fetchedMessages, ...prev]);
-      } else {
-        setMessages(fetchedMessages);
-        setHasMore(fetchedMessages.length === 20);
-       
-      }
-    } catch {
+      setMessages(prev => beforeTimestamp ? [...fetchedMessages, ...prev] : fetchedMessages);
+    } catch (error) {
+      //console.error("History fetch error:", error);
       if (!beforeTimestamp) setMessages([]);
     } finally {
       setIsLoadingHistory(false);
     }
   }, [token]);
 
+  // Main Effect: Join Room & Listeners
   useEffect(() => {
-    if (!activeFriend?.email || !user?.email) return;
+    if (!roomId || !userEmail || !socket) return;
 
-    const roomId = getRoomId(user.email, activeFriend.email);
-
+    // Reset and Fetch
     setMessages([]);
     setHasMore(true);
     getHistory(roomId);
 
-    if (clearUnread) clearUnread(activeFriend.email);
-    if (!socket) return;
+    if (clearUnread && friendEmail) {
+      clearUnread(friendEmail);
+    }
 
     socket.emit("join_room", roomId);
 
-    const handleReceive = newMsg => {
+    const handleReceive = (newMsg) => {
       setMessages(prev => {
-        const localIndex = prev.findIndex(m => m.localId && m.localId === newMsg.localId);
-        if (localIndex !== -1) {
-          const updated = [...prev];
-          updated[localIndex] = newMsg;
-          return updated;
-        }
+        // Prevent duplicate messages
+        if (newMsg.localId && prev.some(m => m.localId === newMsg.localId)) return prev;
         if (newMsg._id && prev.some(m => m._id === newMsg._id)) return prev;
         return [...prev, newMsg];
       });
-  
     };
 
-    const handleTypingEvent = data => {
-      if (data?.sender === activeFriend.email) {
+    const handleTypingEvent = (data) => {
+      if (data?.sender === friendEmail) {
         setIsTyping(true);
         if (typingTimer.current) clearTimeout(typingTimer.current);
         typingTimer.current = setTimeout(() => setIsTyping(false), 1200);
       }
     };
 
+    // Attach Listeners
     socket.on("receive_message", handleReceive);
     socket.on("typing", handleTypingEvent);
 
@@ -100,20 +89,24 @@ export default function useChatLogic(activeFriend) {
       socket.off("typing", handleTypingEvent);
       if (typingTimer.current) clearTimeout(typingTimer.current);
     };
-  }, [activeFriend, user, socket, getHistory]);
 
-  const sendMessage = e => {
+
+  }, [roomId, userEmail, friendEmail, socket, getHistory, clearUnread]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("nomad_dark", dark ? "1" : "0");
+  }, [dark]);
+
+  const sendMessage = (e) => {
     if (e?.preventDefault) e.preventDefault();
-    if (!activeFriend?.email) return;
-    if (!message.trim()) return;
+    if (!roomId || !message.trim() || !socket) return;
 
-    const room = getRoomId(user.email, activeFriend.email);
     const localId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
     const msgData = {
-      room,
+      room: roomId,
       message,
-      sender: user.email,
+      sender: userEmail,
       timestamp: new Date().toISOString(),
       localId,
       content: message,
@@ -122,21 +115,22 @@ export default function useChatLogic(activeFriend) {
     setMessages(prev => [...prev, msgData]);
     setMessage("");
 
-
     socket.emit("send_message", msgData);
   };
 
   const handleTyping = () => {
-    if (!socket || !activeFriend?.email || !user?.email) return;
-    socket.emit("typing", { sender: user.email, receiver: activeFriend.email });
+    if (!socket || !friendEmail || !userEmail) return;
+    socket.emit("typing", { sender: userEmail, receiver: friendEmail });
   };
 
   const addReaction = (msgIndex, emoji) => {
     setMessages(prev => {
       const copy = [...prev];
-      const m = copy[msgIndex];
-      if (!m) return prev;
-      copy[msgIndex] = { ...m, reactions: [...(m.reactions || []), emoji] };
+      if (!copy[msgIndex]) return prev;
+      copy[msgIndex] = { 
+        ...copy[msgIndex], 
+        reactions: [...(copy[msgIndex].reactions || []), emoji] 
+      };
       return copy;
     });
   };
@@ -149,7 +143,6 @@ export default function useChatLogic(activeFriend) {
     setMessage,
     messages,
     isTyping,
-    // messagesEndRef, 
     sendMessage,
     handleTyping,
     addReaction,

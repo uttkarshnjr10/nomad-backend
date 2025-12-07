@@ -1,10 +1,9 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import { authService } from '../services/api';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-    // Load User from Storage on boot
     const [token, setToken] = useState(localStorage.getItem('nomad_token'));
     const [user, setUser] = useState(() => {
         const savedUser = localStorage.getItem('nomad_user');
@@ -20,54 +19,57 @@ export const AuthProvider = ({ children }) => {
         }
     }, [token]);
 
-    const login = async (email, password) => {
+    const login = useCallback(async (email, password) => {
         try {
             const res = await authService.login({ email, password });
-            
-            // Extract all needed data
+
             const { token, username, userId, email: userEmail } = res.data;
-            // Fallback for email if backend doesn't send it in body
             const finalUser = { username, userId, email: userEmail || email };
 
-            // Save to Storage
             localStorage.setItem('nomad_token', token);
             localStorage.setItem('nomad_user', JSON.stringify(finalUser));
-            
+
             setToken(token);
             setUser(finalUser);
-            
+
             return { success: true };
         } catch (error) {
-            console.error("Login Error:", error);
             return { 
                 success: false, 
-                message: error.response?.data?.message || 'Login failed' 
+                message: error.response?.data?.message || 'Login failed'
             };
         }
-    };
+    }, []);
 
-    const register = async (userData) => {
+    const register = useCallback(async (userData) => {
         try {
             const res = await authService.register(userData);
             return { success: true, data: res.data };
         } catch (error) {
-            console.error("Registration Error:", error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Registration failed'
             };
         }
-    };
+    }, []);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         setToken(null);
         setUser(null);
         localStorage.removeItem('nomad_token');
         localStorage.removeItem('nomad_user');
-    };
+    }, []);
+
+    const value = useMemo(() => ({
+        user,
+        login,
+        logout,
+        register,
+        token
+    }), [user, token, login, register, logout]);
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, register, token }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

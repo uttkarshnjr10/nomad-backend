@@ -2,9 +2,12 @@ import React from "react";
 
 const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
 
+      // console.log("Active Friend Data:", activeFriend);
+
   const displayName = 
     activeFriend?.username || 
     activeFriend?.fullName || 
+    (activeFriend?.firstName ? `${activeFriend.firstName} ${activeFriend.lastName || ''}` : null) ||
     activeFriend?.name || 
     activeFriend?.email?.split('@')[0] || 
     "Companion";

@@ -1,11 +1,11 @@
 import { Home, MessageSquare, PlusSquare, LogOut, Compass, Users } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useSocket } from '../../context/SocketContext'; // Import Socket
+import { useSocket } from '../../context/SocketContext'; 
 
 const Navbar = () => {
     const { logout, user } = useAuth();
-    const { totalUnread } = useSocket(); // Get unread count
+    const { totalUnread } = useSocket(); 
     const location = useLocation();
     const navigate = useNavigate();
 

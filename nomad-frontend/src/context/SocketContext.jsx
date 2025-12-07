@@ -1,75 +1,66 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
+import io from "socket.io-client";
 import { useAuth } from "./AuthContext";
 
-const SocketContext = createContext();
+const SocketContext = createContext(null);
+
+export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
-  const { token, user } = useAuth();
+  const { user, token } = useAuth(); 
   const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [unreadMessages, setUnreadMessages] = useState({});
-  const totalUnread = Object.values(unreadMessages).reduce((a, b) => a + b, 0);
 
   useEffect(() => {
-    if (socket) {
-      socket.disconnect();
-      setSocket(null);
-      setIsConnected(false);
-    }
+  
+    if (!user || !token) return;
 
-    if (token && user?.email) {
-      console.log("Initializing socket...");
+    const SOCKET_URL = import.meta.env.VITE_CHAT_SOCKET_URL || "http://localhost:4000"; 
+    //console.log("🔌 Attempting to connect to Socket at:", SOCKET_URL);
+
+    const newSocket = io(SOCKET_URL, {
+      withCredentials: true,
+      auth: {
+        token: token 
+      },
       
-      const newSocket = io(import.meta.env.VITE_CHAT_SOCKET_URL, {
-        auth: { token },
-        transports: ["websocket"], 
-        upgrade: true,
-      });
-
-      newSocket.on("connect", () => {
-        console.log("🟢 Socket connected:", newSocket.id);
-        setIsConnected(true);
-      });
-
-      newSocket.on("disconnect", (reason) => {
-        console.log("🔴 Socket disconnected:", reason);
-        setIsConnected(false);
-      });
-
-      newSocket.on("connect_error", (err) => {
-        console.error("⚠ connect_error:", err.message);
-      });
-
-      newSocket.on("notification", (data) => {
-        console.log("🔔 Notification:", data);
-        const sender = data.senderEmail || data.sender;
-        if (!sender) return;
-        setUnreadMessages((prev) => ({ ...prev, [sender]: (prev[sender] || 0) + 1 }));
-      });
-
-      setSocket(newSocket);
-
-      return () => {
-        console.log("Cleaning up socket...");
-        newSocket.disconnect();
-      };
-    }
-  }, [token, user]); 
-
-  const clearUnread = (friendEmail) => {
-    setUnreadMessages((prev) => {
-      const next = { ...prev };
-      delete next[friendEmail];
-      return next;
+      transports: ["websocket", "polling"], 
     });
-  };
+
+    // 3. Add Event Listeners for Debugging
+    newSocket.on("connect", () => {
+      //console.log("✅ Socket Connected! ID:", newSocket.id);
+    });
+
+    newSocket.on("connect_error", (err) => {
+     // console.error("❌ Socket Connection Error:", err.message);
+      
+    });
+
+    newSocket.on("disconnect", (reason) => {
+      //console.warn("⚠️ Socket Disconnected:", reason);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      //console.log("🛑 Cleaning up socket connection...");
+      newSocket.close();
+      setSocket(null);
+    };
+  }, [user, token]); 
+
+  const clearUnread = useCallback((friendEmail) => {
+      if(socket) socket.emit("clear_unread", { friendEmail });
+  }, [socket]);
+
+  const value = useMemo(() => ({
+    socket,
+    clearUnread
+  }), [socket, clearUnread]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, totalUnread, clearUnread }}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   );
 };
-
-export const useSocket = () => useContext(SocketContext);
