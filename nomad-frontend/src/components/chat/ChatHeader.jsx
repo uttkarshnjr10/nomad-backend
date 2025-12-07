@@ -1,14 +1,18 @@
 import React from "react";
 
 const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
-  // ROBUST NAME LOGIC: Check all possible properties
+  // Debug: Check console to see what data is actually arriving
+  // console.log("ChatHeader received friend:", activeFriend);
+
+  // ROBUST NAME LOGIC: Check all possible properties including 'name'
   const displayName = 
     activeFriend?.username || 
     activeFriend?.fullName || 
+    activeFriend?.name || 
     activeFriend?.email?.split('@')[0] || 
     "Companion";
 
-  const initial = displayName[0]?.toUpperCase() || "?";
+  const initial = displayName ? displayName[0].toUpperCase() : "?";
 
   return (
     <div className="flex items-center justify-between px-4 py-3 w-full bg-white/90 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
@@ -23,9 +27,10 @@ const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
 
         {/* Avatar */}
         <div className="relative">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-white">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-white">
             {initial}
           </div>
+          {/* Online Dot */}
           <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
         </div>
 
@@ -35,7 +40,7 @@ const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
             {displayName}
           </h3>
           <span className="text-[11px] text-green-600 font-medium">
-            Online
+            Active Now
           </span>
         </div>
       </div>

@@ -30,7 +30,7 @@ const Chat = () => {
     handleTyping,
     isTyping,
     addReaction,
-    messagesEndRef,
+  //  messagesEndRef,
     getHistory,
     hasMore,
     isLoadingHistory,
@@ -91,7 +91,7 @@ const Chat = () => {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 flex flex-col overflow-hidden relative">
                 <ChatMessages
                   messages={messages}
                   userEmail={user?.email}
@@ -108,7 +108,7 @@ const Chat = () => {
                       <TypingIndicator name={activeFriend.username || "Friend"} />
                    </div>
                 )}
-                <div ref={messagesEndRef} />
+               {/*<div ref={messagesEndRef} />*/}
               </div>
 
               <div className="p-3 bg-white border-t border-slate-50 shrink-0">

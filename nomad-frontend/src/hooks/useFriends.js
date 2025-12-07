@@ -22,16 +22,11 @@ export default function useFriends() {
 
   //  load Active Friend from Local Storage on Mount
   useEffect(() => {
-    const saved = localStorage.getItem("nomad_active_chat");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed) setActiveFriend(parsed);
-      } catch (e) {
-          console.error("Failed to parse active chat", e);
-      }
+    if (activeFriend) {
+        // Fix: Save the entire object to preserve 'fullName', 'name', etc.
+        localStorage.setItem("nomad_active_chat", JSON.stringify(activeFriend));
     }
-  }, []);
+  }, [activeFriend]);
 
   //  Save Active Friend to Local Storage whenever it changes
   useEffect(() => {

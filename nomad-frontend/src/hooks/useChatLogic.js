@@ -21,7 +21,8 @@ export default function useChatLogic(activeFriend) {
   const [hasMore, setHasMore] = useState(true);
 
   const typingTimer = useRef(null);
-  const messagesEndRef = useRef(null);
+  
+
 
   const getHistory = useCallback(async (roomId, beforeTimestamp = null) => {
     if (!token) return;
@@ -46,11 +47,7 @@ export default function useChatLogic(activeFriend) {
       } else {
         setMessages(fetchedMessages);
         setHasMore(fetchedMessages.length === 20);
-
-        setTimeout(() => {
-          const container = document.querySelector(".overflow-y-auto");
-          if (container) container.scrollTop = container.scrollHeight;
-        }, 100);
+       
       }
     } catch {
       if (!beforeTimestamp) setMessages([]);
@@ -84,8 +81,7 @@ export default function useChatLogic(activeFriend) {
         if (newMsg._id && prev.some(m => m._id === newMsg._id)) return prev;
         return [...prev, newMsg];
       });
-
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+  
     };
 
     const handleTypingEvent = data => {
@@ -126,7 +122,6 @@ export default function useChatLogic(activeFriend) {
     setMessages(prev => [...prev, msgData]);
     setMessage("");
 
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 10);
 
     socket.emit("send_message", msgData);
   };
@@ -154,7 +149,7 @@ export default function useChatLogic(activeFriend) {
     setMessage,
     messages,
     isTyping,
-    messagesEndRef,
+    // messagesEndRef, 
     sendMessage,
     handleTyping,
     addReaction,
