@@ -1,67 +1,145 @@
-import { Heart, MessageCircle, Share2, MapPin } from 'lucide-react';
+import React, { useState } from "react";
+import { postService } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { formatDistanceToNow } from "date-fns"; 
 
 const PostCard = ({ post }) => {
-    // Fix: Since backend now saves 'public/temp/file.jpg' and serves it at '/public',
-    // we can just append the path directly.
-    const imageUrl = post.contentUrl 
-        ? `http://localhost:3000/${post.contentUrl}`
-        : 'https://via.placeholder.com/400';
+  const { user } = useAuth();
 
-    return (
-        <div className="card-sketch mb-8 overflow-hidden hover:-translate-y-1 duration-300">
-            <div className="p-4 flex items-center justify-between border-b-2 border-black bg-gray-50">
-                <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-200 border-2 border-black rounded-full flex items-center justify-center font-black text-gray-800">
-                        {post.username?.[0]?.toUpperCase() || "N"}
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-gray-900">{post.username || "Nomad Traveler"}</h3>
-                        <div className="flex items-center text-xs font-bold text-pink-500">
-                            <MapPin className="w-3 h-3 mr-1" />
-                            <span>Nearby</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="badge-sketch bg-white">
-                   {new Date(post.createdAt).toLocaleDateString()}
-                </div>
-            </div>
+  const [isLiked, setIsLiked] = useState(post.likes.includes(user?.username));
+  const [likesCount, setLikesCount] = useState(post.likes.length);
+  const [comments, setComments] = useState(post.comments || []);
+  
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-            <div className="w-full bg-gray-100 border-b-2 border-black">
-                <img 
-                    src={imageUrl} 
-                    alt="Drop content" 
-                    className="w-full h-auto object-cover max-h-[500px]"
-                    onError={(e) => { e.target.src = "https://via.placeholder.com/400?text=Image+Load+Error"; }}
-                />
-            </div>
+  const getImageUrl = (path) => {
+    if (!path) return "https://via.placeholder.com/400";
+    if (path.startsWith("http")) return path;
 
-            <div className="p-4 bg-white">
-                <div className="flex items-center space-x-4 mb-4">
-                    <button className="p-2 rounded-xl hover:bg-pink-50 border-2 border-transparent hover:border-black transition group">
-                        <Heart className="w-7 h-7 text-gray-700 group-hover:text-pink-500 group-hover:fill-pink-500 transition" />
-                    </button>
-                    <button className="p-2 rounded-xl hover:bg-blue-50 border-2 border-transparent hover:border-black transition group">
-                        <MessageCircle className="w-7 h-7 text-gray-700 group-hover:text-blue-500" />
-                    </button>
-                    <button className="p-2 rounded-xl hover:bg-green-50 border-2 border-transparent hover:border-black transition group ml-auto">
-                        <Share2 className="w-7 h-7 text-gray-700 group-hover:text-green-500" />
-                    </button>
-                </div>
+    const API_URL = import.meta.env.VITE_CONTENT_API_URL;
+    const baseUrl = API_URL.includes('/api') ? API_URL.split('/api')[0] : API_URL;
+    
+    return `${baseUrl}/${path}`;
+  };
 
-                <div className="bg-yellow-50 p-3 rounded-xl border-2 border-black/10">
-                    <p className="text-gray-800">
-                        <span className="font-black mr-2">{post.username}</span>
-                        {post.caption}
-                    </p>
-                </div>
-                
-                <div className="mt-3 flex space-x-3 text-xs font-bold text-gray-400 uppercase tracking-wide">
-                    <span>{post.fuel?.likes || 0} km range</span>
-                </div>
-            </div>
+  const handleLike = async () => {
+    const previousState = isLiked;
+    setIsLiked(!previousState);
+    setLikesCount(prev => previousState ? prev - 1 : prev + 1);
+
+    try {
+      await postService.toggleLike(post._id);
+    } catch (err) {
+      setIsLiked(previousState);
+      setLikesCount(prev => previousState ? prev + 1 : prev - 1);
+      console.error("Like failed", err);
+    }
+  };
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const { data } = await postService.addComment(post._id, newComment);
+      setComments(data.data); 
+      setNewComment("");
+    } catch (err) {
+      console.error("Comment failed", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
+      {/* Header */}
+      <div className="p-4 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+          {post.username?.[0]?.toUpperCase()}
         </div>
-    );
+        <div>
+          <h3 className="font-semibold text-slate-900">{post.username}</h3>
+          <p className="text-xs text-slate-500">
+            {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+          </p>
+        </div>
+      </div>
+
+      {/* Content Image */}
+      <img 
+        src={getImageUrl(post.contentUrl)} 
+        alt="Post content" 
+        className="w-full h-auto object-cover max-h-[500px] bg-slate-50"
+        loading="lazy"
+        onError={(e) => {
+            e.target.src = "https://via.placeholder.com/400?text=Image+Not+Found";
+        }} 
+      />
+
+      {/* Actions Bar */}
+      <div className="p-4">
+        <div className="flex items-center gap-6 mb-3">
+          <button 
+            onClick={handleLike}
+            className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+              isLiked ? "text-pink-500" : "text-slate-600 hover:text-pink-500"
+            }`}
+          >
+            <span className="text-xl">{isLiked ? "♥" : "♡"}</span>
+            {likesCount} Likes
+          </button>
+
+          <button 
+            onClick={() => setShowComments(!showComments)}
+            className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+          >
+            <span className="text-xl">💬</span>
+            {comments.length} Comments
+          </button>
+        </div>
+
+        <p className="text-slate-800 text-sm leading-relaxed mb-2">
+          <span className="font-semibold mr-2">{post.username}</span>
+          {post.caption}
+        </p>
+
+        {/* Comment Section */}
+        {showComments && (
+          <div className="mt-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
+            <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
+              {comments.map((comment, idx) => (
+                <div key={idx} className="flex gap-2 text-sm">
+                  <span className="font-semibold text-slate-900">{comment.username}</span>
+                  <span className="text-slate-700">{comment.content}</span>
+                </div>
+              ))}
+            </div>
+            
+            <form onSubmit={handleCommentSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <button 
+                type="submit" 
+                disabled={isSubmitting || !newComment.trim()}
+                className="text-indigo-600 font-semibold text-sm px-3 disabled:opacity-50"
+              >
+                Post
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default PostCard;

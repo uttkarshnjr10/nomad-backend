@@ -1,55 +1,94 @@
-import React from "react";
-import { Smile } from "lucide-react";
+import React, { useRef, useLayoutEffect, useEffect } from "react";
+import MessageBubble from "./MessageBubble";
 
-export default function ChatMessages({ messages, userEmail, showReactionsFor, setShowReactionsFor, addReaction }) {
+const ChatMessages = ({
+  messages,
+  userEmail,
+  onLoadMore,
+  hasMore,
+  isLoading,
+  showReactionsFor,
+  setShowReactionsFor,
+  addReaction
+}) => {
+  const containerRef = useRef(null);
+  const previousScrollHeightRef = useRef(0);
+  const isFirstLoad = useRef(true);
+
+  // Ensure safe array
+  const safeMessages = Array.isArray(messages) ? messages : [];
+
+  // SCROLL LOGIC
+  useLayoutEffect(() => {
+    if (!containerRef.current) return;
+
+    const currentScrollHeight = containerRef.current.scrollHeight;
+
+    //  Detect if we just loaded OLDER messages 
+    if (previousScrollHeightRef.current > 0 && currentScrollHeight > previousScrollHeightRef.current) {
+      const diff = currentScrollHeight - previousScrollHeightRef.current;
+      containerRef.current.scrollTop = diff; // Keep visual position stable
+      previousScrollHeightRef.current = 0;   // Reset
+    } 
+    // Detect if this is the INITIAL load or a NEW message at the bottom
+    else {
+      // Logic: If user was near bottom OR it's the first load, auto-scroll to bottom
+      const wasNearBottom = true; // Simplified: Always scroll to bottom on new messages for best chat UX
+      
+      if (wasNearBottom) {
+        containerRef.current.scrollTop = currentScrollHeight;
+      }
+    }
+  }, [safeMessages]); // Trigger whenever messages change
+
+  // 2. Handle Scrolling to Top (Trigger Load More)
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight } = e.target;
+    if (scrollTop === 0 && hasMore && !isLoading) {
+      previousScrollHeightRef.current = scrollHeight; // Remember height before loading
+      onLoadMore();
+    }
+  };
+
   return (
-    <>
-      {messages.map((msg, idx) => {
-        const isMe = msg.sender === userEmail;
-        const isPending = !!msg.localId && !msg._id;
-        return (
-          <div key={msg._id || msg.localId || idx} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-            <div className="relative max-w-[78%] transform transition-all duration-300 ease-out">
-              <div
-                  className={`px-4 py-3 rounded-2xl shadow-[3px_3px_0px_#d0d0d0] border text-sm bubble-pop cute-hover
-                    ${isMe ? "bg-[#FADA7A] rounded-tr-none border-yellow-300" : "bg-white rounded-tl-none border-gray-200"}
-                    ${isPending ? "opacity-80 scale-98" : "opacity-100"}`}
-                style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}
-              >
-                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#f7f7fb] scroll-smooth"
+      style={{ scrollBehavior: "smooth" }} 
+    >
+      {/* Loading Spinner for History */}
+      {isLoading && (
+        <div className="w-full flex justify-center py-4">
+          <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+      )}
 
-                <div className="flex items-center justify-end gap-2 mt-2">
-                  <span className="text-[10px] opacity-60">{new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-
-                  <button
-                    onClick={() => setShowReactionsFor(idx)}
-                    className="text-[12px] text-slate-600 hover:text-slate-800 p-1 rounded-full"
-                    aria-label="react"
-                  >
-                    <Smile className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="absolute -bottom-8 left-0 flex gap-2">
-                {msg.reactions?.slice(-3).map((r, i) => (
-                  <div key={i} className="px-2 py-1 bg-white border rounded-full text-xs shadow-sm">{r}</div>
-                ))}
-              </div>
-
-              {showReactionsFor === idx && (
-                <div className="absolute -top-10 left-0 flex gap-2 bg-white p-2 rounded-full shadow-md border">
-                  {["👍", "🔥", "😂", "❤️", "🤔"].map((emoji) => (
-                    <button key={emoji} onClick={() => { addReaction(idx, emoji); setShowReactionsFor(null); }} className="p-1 text-lg">
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </>
+      {/* Messages */}
+      {safeMessages.map((msg, index) => (
+        <MessageBubble
+          key={msg._id || msg.localId || index}
+          message={msg}
+          idx={index}
+          isOwn={msg.sender === userEmail}
+          showReactionsFor={showReactionsFor}
+          setShowReactionsFor={setShowReactionsFor}
+          addReaction={addReaction}
+        />
+      ))}
+      
+      {/* Empty State */}
+      {safeMessages.length === 0 && !isLoading && (
+        <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60">
+          <span className="text-4xl mb-2">👋</span>
+          <p>No messages yet. Start the conversation!</p>
+        </div>
+      )}
+      
+      {/* Invisible element to force bottom scroll if needed */}
+      <div id="scroll-bottom-anchor" />
+    </div>
   );
-}
+};
+
+export default ChatMessages;

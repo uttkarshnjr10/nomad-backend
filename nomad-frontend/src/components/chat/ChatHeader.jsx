@@ -1,19 +1,52 @@
 import React from "react";
 
-export default function ChatHeader({ activeFriend, onToggleSidebar }) {
+const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
+  // ROBUST NAME LOGIC: Check all possible properties
+  const displayName = 
+    activeFriend?.username || 
+    activeFriend?.fullName || 
+    activeFriend?.email?.split('@')[0] || 
+    "Companion";
+
+  const initial = displayName[0]?.toUpperCase() || "?";
+
   return (
-    <div className="p-4 bg-[#C7E8FF] border-b border-black/10 flex items-center gap-3">
-      <button onClick={onToggleSidebar} className="md:hidden p-2 bg-white rounded-lg border shadow">
-        ☰
-      </button>
-      <div className="w-10 h-10 rounded-full bg-white border flex items-center justify-center font-bold">
-        {activeFriend.username?.[0]?.toUpperCase() || activeFriend.email?.[0]?.toUpperCase()}
+    <div className="flex items-center justify-between px-4 py-3 w-full bg-white/90 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
+      <div className="flex items-center gap-3">
+        {/* Mobile Back Button */}
+        <button 
+          onClick={onToggleSidebar}
+          className="md:hidden text-slate-500 hover:text-indigo-600 transition-colors p-1"
+        >
+          <span className="text-xl">←</span>
+        </button>
+
+        {/* Avatar */}
+        <div className="relative">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-white">
+            {initial}
+          </div>
+          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+        </div>
+
+        {/* Name & Status */}
+        <div className="flex flex-col">
+          <h3 className="font-bold text-slate-800 text-sm md:text-base leading-tight">
+            {displayName}
+          </h3>
+          <span className="text-[11px] text-green-600 font-medium">
+            Online
+          </span>
+        </div>
       </div>
-      <div>
-        <div className="font-bold tracking-wide">{activeFriend.username}</div>
-        <div className="text-xs text-slate-600">{activeFriend.email}</div>
+
+      {/* Icons */}
+      <div className="flex items-center gap-2 text-slate-400">
+         <button className="hover:bg-slate-50 p-2 rounded-full transition-all">📞</button>
+         <button className="hover:bg-slate-50 p-2 rounded-full transition-all">📹</button>
       </div>
-      <div className="ml-auto text-sm text-slate-600">Online</div>
     </div>
   );
-}
+};
+
+export default ChatHeader;

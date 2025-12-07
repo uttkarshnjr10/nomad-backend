@@ -1,8 +1,13 @@
 import mongoose, { Schema } from "mongoose";
 
+const commentSchema = new Schema({
+    username: { type: String, required: true }, 
+    content: { type: String, required: true, trim: true },
+    createdAt: { type: Date, default: Date.now }
+});
+
 const postSchema = new Schema(
     {
-        
         userId: {
             type: String, 
             required: true,
@@ -20,7 +25,6 @@ const postSchema = new Schema(
             type: String,
             trim: true
         },
-
         location: {
             type: {
                 type: String,
@@ -32,12 +36,9 @@ const postSchema = new Schema(
                 required: true
             }
         },
-        fuel: {
-            likes: { type: Number, default: 0 },
-            comments: { type: Number, default: 0 },
-            shares: { type: Number, default: 0 }
-        },
-
+        likes: [{ type: String }], 
+        comments: [commentSchema],
+        
         journey: [
             {
                 city: String,

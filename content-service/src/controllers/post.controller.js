@@ -1,86 +1,66 @@
-import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { Post } from "../models/post.model.js";
+import { ApiError } from "../utils/ApiError.js";
+import { postService } from "../services/post.service.js";
+import { createPostSchema, commentSchema, queryFeedSchema } from "../validators/post.validator.js";
+import { MESSAGES } from "../constants.js";
 
 const createPost = asyncHandler(async (req, res) => {
-    const { caption, latitude, longitude } = req.body;
-
-    if (!latitude || !longitude) {
-        throw new ApiError(400, "GPS Coordinates are required");
+    // validation
+    const validation = createPostSchema.safeParse(req.body);
+    if (!validation.success) {
+        throw new ApiError(400, validation.error.errors[0].message);
     }
+    
+    if (!req.file) throw new ApiError(400, "Media file is required");
 
-    const localFilePath = req.file?.path;
-    if (!localFilePath) {
-        throw new ApiError(400, "Image/Video file is required");
-    }
+    const normalizedPath = req.file.path.replace(/\\/g, "/");
 
-    const normalizedPath = localFilePath.replace(/\\/g, "/");
-
-    const post = await Post.create({
-        userId: req.user.username,
+    // service Call
+    const post = await postService.createPost({
         username: req.user.username,
-        contentUrl: normalizedPath, 
-        caption,
-        location: {
-            type: "Point",
-            coordinates: [parseFloat(longitude), parseFloat(latitude)]
-        },
-        fuel: { likes: 0, comments: 0, shares: 0 }
+        caption: validation.data.caption,
+        filePath: normalizedPath, 
+        lat: validation.data.latitude,
+        lng: validation.data.longitude
     });
 
     return res.status(201).json(
-        new ApiResponse(201, post, "Drop created successfully!")
+        new ApiResponse(201, post, MESSAGES.POST_CREATED)
     );
 });
 
 const getFeed = asyncHandler(async (req, res) => {
-    const { lat, lng, radius = 5000 } = req.query;
+    const validation = queryFeedSchema.safeParse(req.query);
+    if (!validation.success) throw new ApiError(400, "Invalid location coordinates");
 
-    if (!lat || !lng) {
-        throw new ApiError(400, "Current location (lat, lng) is required to view the feed");
-    }
-
-    const posts = await Post.find({
-        location: {
-            $near: {
-                $geometry: {
-                    type: "Point",
-                    coordinates: [parseFloat(lng), parseFloat(lat)]
-                },
-                $maxDistance: parseInt(radius)
-            }
-        }
-    });
+    const posts = await postService.getFeed(validation.data);
 
     return res.status(200).json(
-        new ApiResponse(200, posts, `Found ${posts.length} drops near you`)
+        new ApiResponse(200, posts, MESSAGES.POST_FOUND)
     );
 });
 
 const toggleLike = asyncHandler(async (req, res) => {
     const { postId } = req.params;
-
-    if (!mongoose.isValidObjectId(postId)) {
-        throw new ApiError(400, "Invalid Post ID");
-    }
-
-    const post = await Post.findByIdAndUpdate(
-        postId,
-        { 
-            $inc: { "fuel.likes": 1 } 
-        },
-        { new: true } 
-    );
-
-    if (!post) {
-        throw new ApiError(404, "Post not found");
-    }
-
+    const result = await postService.toggleLike(postId, req.user.username);
+    
     return res.status(200).json(
-        new ApiResponse(200, post, "Fuel added! (+1km range)")
+        new ApiResponse(200, result, result.isLiked ? MESSAGES.LIKE_ADDED : MESSAGES.LIKE_REMOVED)
     );
 });
 
-export { createPost, getFeed, toggleLike };
+const addComment = asyncHandler(async (req, res) => {
+    const { postId } = req.params;
+    const validation = commentSchema.safeParse(req.body);
+    
+    if (!validation.success) throw new ApiError(400, validation.error.errors[0].message);
+
+    const comments = await postService.addComment(postId, req.user.username, validation.data.content);
+
+    return res.status(200).json(
+        new ApiResponse(200, comments, MESSAGES.COMMENT_ADDED)
+    );
+});
+
+export { createPost, getFeed, toggleLike, addComment };

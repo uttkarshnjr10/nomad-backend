@@ -47,6 +47,17 @@ contentApi.interceptors.request.use((config) => {
     }
     return config;
 });
+export const postService = {
+  
+    createPost: (data) => contentApi.post('/', data, { 
+        headers: { 'Content-Type': 'multipart/form-data' }
+    }),
 
+    getFeed: (lat, lng, radius) => contentApi.get(`/feed?lat=${lat}&lng=${lng}&radius=${radius}`),
+
+    toggleLike: (postId) => contentApi.post(`/${postId}/like`),
+
+    addComment: (postId, content) => contentApi.post(`/${postId}/comment`, { content }),
+};
 
 export { api as authApi };

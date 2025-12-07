@@ -3,115 +3,92 @@ import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import getRoomId from "../utils/getRoomId";
-import { friendApi } from "../services/api";
 
-export default function useChatLogic() {
+export default function useChatLogic(activeFriend) {
   const { user, token } = useAuth();
   const { socket, clearUnread } = useSocket();
 
   const [dark, setDark] = useState(() => localStorage.getItem("nomad_dark") === "1");
-  const [activeFriend, setActiveFriend] = useState(() => {
-    const saved = localStorage.getItem("nomad_active_chat");
-    if (!saved) return null;
-    try {
-      const parsed = JSON.parse(saved);
-      return { email: parsed.friendEmail, username: parsed.username || parsed.friendEmail };
-    } catch {
-      return null;
-    }
-  });
-
-  const [friends, setFriends] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
-
-  const typingTimer = useRef(null);
-  const messagesEndRef = useRef(null);
-  const friendsListRef = useRef(null);
-
-  const scrollMessagesToBottom = (smooth = true) => {
-    if (!messagesEndRef.current) return;
-    messagesEndRef.current.scrollIntoView({
-      behavior: smooth ? "smooth" : "auto",
-    });
-  };
-
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     localStorage.setItem("nomad_dark", dark ? "1" : "0");
   }, [dark]);
 
-  useEffect(() => {
-    const fetchFriends = async () => {
-      try {
-        const res = await friendApi.getFriends();
-        setFriends(res.data || []);
-        // console.log("friends loaded");
-      } catch {}
-    };
-    fetchFriends();
-  }, []);
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  const getHistory = useCallback(
-    async (roomId) => {
-      try {
-        const API = import.meta.env.VITE_API_URL;
-        const res = await axios.get(`${API}/api/chat/history/${encodeURIComponent(roomId)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setMessages(res.data || []);
-        setTimeout(() => scrollMessagesToBottom(false), 50);
-        // console.log("history loaded");
-      } catch {}
-    },
-    [token]
-  );
+  const typingTimer = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  const getHistory = useCallback(async (roomId, beforeTimestamp = null) => {
+    if (!token) return;
+    try {
+      setIsLoadingHistory(true);
+      const API_BASE = import.meta.env.VITE_API_URL;
+      const query = beforeTimestamp ? `?before=${beforeTimestamp}` : "";
+
+      const res = await axios.get(
+        `${API_BASE}/api/chat/history/${encodeURIComponent(roomId)}${query}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      let fetchedMessages = [];
+      if (Array.isArray(res.data)) fetchedMessages = res.data;
+      else if (res.data?.data) fetchedMessages = res.data.data;
+
+      if (fetchedMessages.length < 20) setHasMore(false);
+
+      if (beforeTimestamp) {
+        setMessages(prev => [...fetchedMessages, ...prev]);
+      } else {
+        setMessages(fetchedMessages);
+        setHasMore(fetchedMessages.length === 20);
+
+        setTimeout(() => {
+          const container = document.querySelector(".overflow-y-auto");
+          if (container) container.scrollTop = container.scrollHeight;
+        }, 100);
+      }
+    } catch {
+      if (!beforeTimestamp) setMessages([]);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [token]);
 
   useEffect(() => {
     if (!activeFriend?.email || !user?.email) return;
 
     const roomId = getRoomId(user.email, activeFriend.email);
+
+    setMessages([]);
+    setHasMore(true);
     getHistory(roomId);
 
+    if (clearUnread) clearUnread(activeFriend.email);
     if (!socket) return;
 
     socket.emit("join_room", roomId);
-    // console.log("joined room", roomId);
 
-    const handleReceive = (newMsg) => {
-      setMessages((prev) => {
-        const localMatchIndex = prev.findIndex(
-          (m) => m.localId && m.localId === newMsg.localId
-        );
-
-        if (localMatchIndex !== -1) {
-          const copy = [...prev];
-          copy[localMatchIndex] = newMsg;
-          return copy;
+    const handleReceive = newMsg => {
+      setMessages(prev => {
+        const localIndex = prev.findIndex(m => m.localId && m.localId === newMsg.localId);
+        if (localIndex !== -1) {
+          const updated = [...prev];
+          updated[localIndex] = newMsg;
+          return updated;
         }
-
-        if (newMsg._id && prev.some((m) => m._id === newMsg._id)) return prev;
-
-        if (
-          prev.some(
-            (m) =>
-              m.content === newMsg.content &&
-              Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 1000
-          )
-        ) {
-          return prev;
-        }
-
+        if (newMsg._id && prev.some(m => m._id === newMsg._id)) return prev;
         return [...prev, newMsg];
       });
 
-      setTimeout(() => scrollMessagesToBottom(true), 50);
-      // console.log("message received");
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     };
 
-    const handleTyping = (data) => {
+    const handleTypingEvent = data => {
       if (data?.sender === activeFriend.email) {
         setIsTyping(true);
         if (typingTimer.current) clearTimeout(typingTimer.current);
@@ -120,18 +97,19 @@ export default function useChatLogic() {
     };
 
     socket.on("receive_message", handleReceive);
-    socket.on("typing", handleTyping);
+    socket.on("typing", handleTypingEvent);
 
     return () => {
       socket.off("receive_message", handleReceive);
-      socket.off("typing", handleTyping);
+      socket.off("typing", handleTypingEvent);
       if (typingTimer.current) clearTimeout(typingTimer.current);
     };
   }, [activeFriend, user, socket, getHistory]);
 
-  const sendMessage = (e) => {
+  const sendMessage = e => {
     if (e?.preventDefault) e.preventDefault();
-    if (!message.trim() || !socket || !activeFriend?.email) return;
+    if (!activeFriend?.email) return;
+    if (!message.trim()) return;
 
     const room = getRoomId(user.email, activeFriend.email);
     const localId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -145,13 +123,12 @@ export default function useChatLogic() {
       content: message,
     };
 
-    setMessages((prev) => [...prev, msgData]);
-
+    setMessages(prev => [...prev, msgData]);
     setMessage("");
-    scrollMessagesToBottom(true);
+
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 10);
 
     socket.emit("send_message", msgData);
-    // console.log("sent", localId);
   };
 
   const handleTyping = () => {
@@ -160,14 +137,11 @@ export default function useChatLogic() {
   };
 
   const addReaction = (msgIndex, emoji) => {
-    setMessages((prev) => {
+    setMessages(prev => {
       const copy = [...prev];
-      const item = copy[msgIndex];
-      if (!item) return prev;
-      copy[msgIndex] = {
-        ...item,
-        reactions: [...(item.reactions || []), emoji],
-      };
+      const m = copy[msgIndex];
+      if (!m) return prev;
+      copy[msgIndex] = { ...m, reactions: [...(m.reactions || []), emoji] };
       return copy;
     });
   };
@@ -176,22 +150,16 @@ export default function useChatLogic() {
     user,
     dark,
     setDark,
-    friends,
-    setFriends,
-    activeFriend,
-    setActiveFriend,
-    isSidebarOpen,
-    setIsSidebarOpen,
     message,
     setMessage,
     messages,
-    setMessages,
     isTyping,
     messagesEndRef,
-    friendsListRef,
     sendMessage,
     handleTyping,
     addReaction,
-    clearUnread,
+    getHistory,
+    hasMore,
+    isLoadingHistory
   };
 }

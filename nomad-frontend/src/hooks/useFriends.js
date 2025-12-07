@@ -7,25 +7,52 @@ export default function useFriends() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showReactionsFor, setShowReactionsFor] = useState(null);
 
+  //  fetch Friends
   useEffect(() => {
     const fetch = async () => {
       try {
         const res = await friendApi.getFriends();
         setFriends(res.data || []);
-      } catch (e) {}
+      } catch (e) {
+          console.error("Failed to fetch friends", e);
+      }
     };
     fetch();
   }, []);
 
+  //  load Active Friend from Local Storage on Mount
   useEffect(() => {
     const saved = localStorage.getItem("nomad_active_chat");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setActiveFriend({ email: parsed.friendEmail, username: parsed.username || parsed.friendEmail });
-      } catch {}
+        if (parsed) setActiveFriend(parsed);
+      } catch (e) {
+          console.error("Failed to parse active chat", e);
+      }
     }
   }, []);
 
-  return { friends, setFriends, activeFriend, setActiveFriend, isSidebarOpen, setIsSidebarOpen, showReactionsFor, setShowReactionsFor };
+  //  Save Active Friend to Local Storage whenever it changes
+  useEffect(() => {
+    if (activeFriend) {
+        const friendToSave = {
+            _id: activeFriend._id,
+            email: activeFriend.email,
+            username: activeFriend.username
+        };
+        localStorage.setItem("nomad_active_chat", JSON.stringify(friendToSave));
+    }
+  }, [activeFriend]);
+
+  return { 
+      friends, 
+      setFriends, 
+      activeFriend, 
+      setActiveFriend, 
+      isSidebarOpen, 
+      setIsSidebarOpen, 
+      showReactionsFor, 
+      setShowReactionsFor 
+  };
 }
