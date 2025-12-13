@@ -17,11 +17,10 @@ const PostCard = ({ post }) => {
   const getImageUrl = (path) => {
     if (!path) return "https://via.placeholder.com/400";
     if (path.startsWith("http")) return path;
-
-    const API_URL = import.meta.env.VITE_CONTENT_API_URL;
-    const baseUrl = API_URL.includes('/api') ? API_URL.split('/api')[0] : API_URL;
     
-    return `${baseUrl}/${path}`;
+    // Fallback for old local images during migration
+    const API_URL = import.meta.env.VITE_CONTENT_API_URL;
+    return `${API_URL}/${path}`;
   };
 
   const handleLike = async () => {

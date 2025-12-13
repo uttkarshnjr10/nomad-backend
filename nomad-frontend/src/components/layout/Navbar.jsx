@@ -9,7 +9,10 @@ const Navbar = () => {
     const location = useLocation();
     const navigate = useNavigate();
 
-    const isActive = (path) => location.pathname === path ? "text-pink-500 bg-pink-50" : "text-gray-600 hover:bg-gray-50";
+    const isActive = (path) =>
+        location.pathname === path
+            ? "text-pink-500 bg-pink-50"
+            : "text-gray-600 hover:bg-gray-50";
 
     const handleLogout = () => {
         logout();
@@ -18,7 +21,7 @@ const Navbar = () => {
 
     return (
         <>
-            <div className="hidden md:flex fixed top-0 w-full bg-white border-b-2 border-black z-50 justify-between items-center px-8 py-4">
+            <nav className="hidden md:flex w-full h-16 bg-white border-b-2 border-black z-50 shrink-0 justify-between items-center px-8">
                 <div className="flex items-center space-x-2">
                     <div className="bg-pink-400 border-2 border-black p-1 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                         <Compass className="text-white w-6 h-6" />
@@ -32,11 +35,11 @@ const Navbar = () => {
                     <Link to="/" className={`px-4 py-2 rounded-xl font-bold transition flex items-center space-x-2 border-2 border-transparent hover:border-black ${isActive('/')}`}>
                         <Home className="w-5 h-5" /> <span>Feed</span>
                     </Link>
+
                     <Link to="/friends" className={`px-4 py-2 rounded-xl font-bold transition flex items-center space-x-2 border-2 border-transparent hover:border-black ${isActive('/friends')}`}>
                         <Users className="w-5 h-5" /> <span>Friends</span>
                     </Link>
-                    
-                    {/* CHAT LINK WITH BADGE */}
+
                     <Link to="/chat" className={`relative px-4 py-2 rounded-xl font-bold transition flex items-center space-x-2 border-2 border-transparent hover:border-black ${isActive('/chat')}`}>
                         <MessageSquare className="w-5 h-5" /> <span>Chat</span>
                         {totalUnread > 0 && (
@@ -54,25 +57,33 @@ const Navbar = () => {
                         </div>
                         <span className="font-bold text-sm">{user?.username}</span>
                     </div>
-                    <button onClick={handleLogout} className="p-2 hover:text-red-500 transition border-2 border-transparent hover:border-black rounded-xl">
+                    <button
+                        onClick={handleLogout}
+                        className="p-2 hover:text-red-500 transition border-2 border-transparent hover:border-black rounded-xl"
+                    >
                         <LogOut className="w-5 h-5" />
                     </button>
                 </div>
-            </div>
+            </nav>
 
-            {/* MOBILE NAV */}
             <div className="md:hidden fixed bottom-0 w-full bg-white border-t-2 border-black z-50 flex justify-around items-center py-3 pb-safe">
                 <Link to="/" className={`p-2 rounded-xl ${isActive('/')}`}>
                     <Home className="w-7 h-7" />
                 </Link>
+
                 <Link to="/friends" className={`p-2 rounded-xl ${isActive('/friends')}`}>
                     <Users className="w-7 h-7" />
                 </Link>
+
                 <div className="relative -top-6">
-                    <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="bg-pink-400 border-2 border-black p-4 rounded-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transform active:scale-95 transition">
+                    <button
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="bg-pink-400 border-2 border-black p-4 rounded-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white transform active:scale-95 transition"
+                    >
                         <PlusSquare className="w-8 h-8" />
                     </button>
                 </div>
+
                 <Link to="/chat" className={`relative p-2 rounded-xl ${isActive('/chat')}`}>
                     <MessageSquare className="w-7 h-7" />
                     {totalUnread > 0 && (

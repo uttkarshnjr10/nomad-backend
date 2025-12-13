@@ -1,13 +1,9 @@
 import React from "react";
 
 const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
-
-      // console.log("Active Friend Data:", activeFriend);
-
   const displayName = 
     activeFriend?.username || 
     activeFriend?.fullName || 
-    (activeFriend?.firstName ? `${activeFriend.firstName} ${activeFriend.lastName || ''}` : null) ||
     activeFriend?.name || 
     activeFriend?.email?.split('@')[0] || 
     "Companion";
@@ -15,7 +11,7 @@ const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
   const initial = displayName ? displayName[0].toUpperCase() : "?";
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 w-full bg-white/90 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
+    <div className="flex items-center justify-between px-4 py-3 w-full bg-white/95 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50 h-16 shadow-sm">
       <div className="flex items-center gap-3">
         {/* Mobile Back Button */}
         <button 
@@ -30,7 +26,8 @@ const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
           <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-white">
             {initial}
           </div>
-          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+          {/* Online Status Indicator */}
+          <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-white rounded-full ${activeFriend?.online ? 'bg-green-500' : 'bg-gray-300'}`}></div>
         </div>
 
         {/* Name & Status */}
@@ -38,8 +35,8 @@ const ChatHeader = ({ activeFriend, onToggleSidebar }) => {
           <h3 className="font-bold text-slate-800 text-sm md:text-base leading-tight">
             {displayName}
           </h3>
-          <span className="text-[11px] text-green-600 font-medium">
-            Active Now
+          <span className="text-[11px] text-slate-500 font-medium">
+            {activeFriend?.online ? "Active Now" : "Offline"}
           </span>
         </div>
       </div>

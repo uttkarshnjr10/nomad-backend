@@ -6,15 +6,9 @@ export default function useFriends() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showReactionsFor, setShowReactionsFor] = useState(null);
 
-  const [activeFriendId, setActiveFriendId] = useState(() => {
-    try {
-      const saved = localStorage.getItem("nomad_active_chat");
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      console.error("Failed to parse active chat", e);
-      return null;
-    }
-  });
+  // Initialize as null to prevent auto-opening.
+  // We also removed the localStorage read logic here.
+  const [activeFriendId, setActiveFriendId] = useState(null); 
 
   useEffect(() => {
     const fetchFriends = async () => {
@@ -28,7 +22,6 @@ export default function useFriends() {
     fetchFriends();
   }, []);
 
- 
   const activeFriend = useMemo(() => {
     if (!activeFriendId) return null;
     const freshData = friends.find(f => f.email === activeFriendId.email);
@@ -37,6 +30,7 @@ export default function useFriends() {
 
   const handleSetActiveFriend = (friend) => {
     setActiveFriendId(friend);
+    
     if (friend) {
       localStorage.setItem("nomad_active_chat", JSON.stringify(friend));
     } else {

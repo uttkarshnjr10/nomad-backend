@@ -4,31 +4,39 @@ import { ApiError } from "../utils/ApiError.js";
 import { postService } from "../services/post.service.js";
 import { createPostSchema, commentSchema, queryFeedSchema } from "../validators/post.validator.js";
 import { MESSAGES } from "../constants.js";
+import cloudinary from "../config/cloudinary.js";
 
 const createPost = asyncHandler(async (req, res) => {
-    // validation
-    const validation = createPostSchema.safeParse(req.body);
-    if (!validation.success) {
-        throw new ApiError(400, validation.error.errors[0].message);
-    }
-    
-    if (!req.file) throw new ApiError(400, "Media file is required");
+  const validation = createPostSchema.safeParse(req.body);
+  if (!validation.success) throw new ApiError(400, validation.error.errors[0].message);
+  if (!req.file) throw new ApiError(400, "Media file is required");
 
-    const normalizedPath = req.file.path.replace(/\\/g, "/");
-
-    // service Call
-    const post = await postService.createPost({
-        username: req.user.username,
-        caption: validation.data.caption,
-        filePath: normalizedPath, 
-        lat: validation.data.latitude,
-        lng: validation.data.longitude
-    });
-
-    return res.status(201).json(
-        new ApiResponse(201, post, MESSAGES.POST_CREATED)
+  const upload = await new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+         folder: "nomad-app-uploads",
+         resource_type: "auto"
+      },
+      
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
     );
+    stream.end(req.file.buffer);
+  });
+
+  const post = await postService.createPost({
+    username: req.user.username,
+    caption: validation.data.caption,
+    filePath: upload.secure_url,
+    lat: validation.data.latitude,
+    lng: validation.data.longitude
+  });
+
+  return res.status(201).json(new ApiResponse(201, post, MESSAGES.POST_CREATED));
 });
+
 
 const getFeed = asyncHandler(async (req, res) => {
     const validation = queryFeedSchema.safeParse(req.query);
