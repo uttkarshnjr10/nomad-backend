@@ -1,0 +1,77 @@
+# ------------------------------------------------------
+# IGNORE ALL ENV FILES (ROOT + ALL SERVICES)
+# ------------------------------------------------------
+.env
+**/.env
+
+# Common variations of env files
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+.env.stage
+
+# ------------------------------------------------------
+# GENERAL / SYSTEM FILES
+# ------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# ------------------------------------------------------
+# NODE.JS (Chat Service, Content Service, Frontend)
+# ------------------------------------------------------
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Optional: remove if you want lockfile consistency
+package-lock.json
+
+# ------------------------------------------------------
+# FRONTEND (React + Vite)
+# ------------------------------------------------------
+nomad-frontend/dist/
+nomad-frontend/build/
+
+# ------------------------------------------------------
+# BACKEND - JAVA (Auth Service)
+# ------------------------------------------------------
+*.class
+*.log
+*.ctxt
+.mtj.tmp/
+
+# Package & build artifacts
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven target outputs
+auth-service/target/
+target/
+
+# IntelliJ/Eclipse generated files
+.classpath
+.project
+.settings/
+*.iml
+
+# ------------------------------------------------------
+# BACKEND - CONTENT SERVICE (Uploads)
+# ------------------------------------------------------
+# Ignore uploaded files but keep folder structure
+content-service/public/temp/*
+!content-service/public/temp/.gitkeep
+
+# ------------------------------------------------------
+# DOCKER
+# ------------------------------------------------------
+docker-compose.override.yml
